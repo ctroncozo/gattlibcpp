@@ -263,6 +263,7 @@ int gattlib_adapter_scan_disable(gattlib_adapter_t* adapter) {
 }
 
 int gattlib_adapter_close(gattlib_adapter_t* adapter) {
+	printf("hci close device");
 	hci_close_dev(*(int*)adapter);
 	free(adapter);
 	return GATTLIB_SUCCESS;

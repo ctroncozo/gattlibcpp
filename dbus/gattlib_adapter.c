@@ -660,6 +660,7 @@ EXIT:
 }
 
 int gattlib_adapter_close(gattlib_adapter_t* adapter) {
+	GATTLIB_LOG(GATTLIB_INFO, "Closing device");
 	bool are_devices_disconnected;
 	int ret = GATTLIB_SUCCESS;
 
