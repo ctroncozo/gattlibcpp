@@ -298,6 +298,11 @@ void gattlib_handler_dispatch_to_thread(struct gattlib_handler* handler, void (*
 		GATTLIB_LOG(GATTLIB_ERROR, "Failed to create thread '%s': %s", thread_name, error->message);
 		g_error_free(error);
 		return;
+	} else {
+		// Unref the thread created by g_thread_try_new(), otherwise GLib will never free the memory 
+		// associated with the thread's GThread* struct — even after the thread function has completed.
+		g_thread_unref(handler->thread);
+		handler->thread = NULL;
 	}
 }
 

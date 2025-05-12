@@ -82,13 +82,17 @@ static gpointer _gattlib_discovered_device_thread(gpointer data) {
 	gattlib_adapter_unref(args->gattlib_adapter);
 
 EXIT:
-	free(args->mac_address);
+	// mac_address and name are allocated with strdup() in the thread_args_allocator.
+	// It means it must be freed to avoid memory leak.
+	if(args->mac_address != NULL) {
+		free(args->mac_address);
+		args->mac_address = NULL;
+	}
 	if (args->name != NULL) {
 		free(args->name);
 		args->name = NULL;
 	}
 	free(args);
-	printf("[LEAK DEBUG] Freed discovered device args\n");
 	return NULL;
 }
 
