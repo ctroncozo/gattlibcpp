@@ -6,7 +6,7 @@
 
 #include "gattlib_internal.h"
 
-// This recursive mutex ensures all gattlib objects can be accessed in a multi-threaded environment
+// This recursive mutex ensures all gattlib objects can be accessed in a multi-threaded environmerssi_variantnt
 // The recursive mutex allows a same thread to lock twice the mutex without being blocked by itself.
 GRecMutex m_gattlib_mutex;
 
@@ -229,12 +229,14 @@ on_interface_proxy_properties_changed (GDBusObjectManagerClient *device_manager,
 		}
 	}
 
+	gchar* changed_properties_str = g_variant_print(changed_properties, TRUE);
 	GATTLIB_LOG(GATTLIB_DEBUG, "DBUS: on_interface_proxy_properties_changed(%s): interface:%s changed_properties:%s invalidated_properties:%d",
 			proxy_object_path,
 			g_dbus_proxy_get_interface_name(interface_proxy),
-			g_variant_print(changed_properties, TRUE),
+			changed_properties_str,
 			invalidated_properties_count);
 
+	g_free(changed_properties_str);  	
 	g_rec_mutex_lock(&m_gattlib_mutex);
 
 	if (!gattlib_adapter_is_valid(gattlib_adapter)) {
@@ -282,8 +284,14 @@ on_interface_proxy_properties_changed (GDBusObjectManagerClient *device_manager,
 			}
 		}
 
-		g_variant_dict_end(&dict);
+		// g_variant_dict_end is not the right function to call here. 
+		//g_variant_dict_end(&dict);
+		g_variant_dict_clear(&dict);
+
 		g_object_unref(device1);
+
+		if (has_rssi) g_variant_unref(has_rssi);
+		if (has_manufacturer_data) g_variant_unref(has_manufacturer_data);
 	}
 
 EXIT:
@@ -427,7 +435,7 @@ static int _gattlib_adapter_scan_enable_with_filter(gattlib_adapter_t* adapter, 
 
 	if (enabled_filters & GATTLIB_DISCOVER_FILTER_USE_RSSI) {
 		GATTLIB_LOG(GATTLIB_DEBUG, "Configure bluetooth scan with RSSI");
-		GVariant *rssi_variant = g_variant_new_int16(rssi_threshold);
+		rssi_variant = g_variant_new_int16(rssi_threshold);
 		g_variant_builder_add(&arg_properties_builder, "{sv}", "RSSI", rssi_variant);
 	}
 

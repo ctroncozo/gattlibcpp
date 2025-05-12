@@ -152,6 +152,11 @@ int gattlib_device_unref(gattlib_device_t* device) {
     if (device->reference_counter > 0) {
         goto EXIT;
     }
+    
+    if (device->device_id) {
+        g_free(device->device_id);
+        device->device_id = NULL;
+    }
 
     free(device);
 

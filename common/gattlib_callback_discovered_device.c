@@ -88,6 +88,7 @@ EXIT:
 		args->name = NULL;
 	}
 	free(args);
+	printf("[LEAK DEBUG] Freed discovered device args\n");
 	return NULL;
 }
 
