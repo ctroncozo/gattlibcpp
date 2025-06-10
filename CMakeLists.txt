@@ -176,3 +176,6 @@ install(FILES include/gattlib.h DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 install(FILES ${PROJECT_BINARY_DIR}/gattlib.pc DESTINATION ${CMAKE_INSTALL_LIBDIR}/pkgconfig)
 
 include(CPack)
+
+# CPP wrapper
+add_subdirectory(cpp)
