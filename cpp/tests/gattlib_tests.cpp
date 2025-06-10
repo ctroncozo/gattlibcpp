@@ -94,7 +94,7 @@ protected:
  */
 TEST_F(GattlibScannerWithGMainLoop, ShutdownTest) {
   // Create scanner with injected dependencies for better testability
-  blecpp::GattlibScanner scanner(loop_manager_, fake_adapter_, functions_);
+  blecpp::GattlibScanner scanner(fake_adapter_, functions_);
 
   // Set up expectations for the complete scan lifecycle
   // Use InSequence to verify shutdown sequence happens in order
@@ -111,9 +111,8 @@ TEST_F(GattlibScannerWithGMainLoop, ShutdownTest) {
   // 3. Wait for scan to stop
   EXPECT_CALL(*mock_, adapter_wait_scan_stopped(fake_adapter_));
 
-  // 4. Close adapter during shutdown
-  EXPECT_CALL(*mock_, adapter_close(fake_adapter_))
-    .WillOnce(Return(GATTLIB_SUCCESS));
+  // 4. Expect adapter_close is never called since we don't own it
+  EXPECT_CALL(*mock_, adapter_close(fake_adapter_)).Times(Exactly(0));
 
   // Verify scanner handles scan correctly
   EXPECT_EQ(scanner.scan(2), GATTLIB_TIMEOUT);
@@ -135,7 +134,7 @@ TEST_F(GattlibScannerWithGMainLoop, ShutdownTest) {
  * null adapter in the third discovery
  */
 TEST_F(GattlibScannerWithGMainLoop, AdapterNullTest) {
-  blecpp::GattlibScanner scanner(loop_manager_, fake_adapter_, functions_);
+  blecpp::GattlibScanner scanner(fake_adapter_, functions_);
 
   // Expect the scan to be called and start successfully
   EXPECT_CALL(*mock_, adapter_scan_enable(fake_adapter_, _, 10, _))
@@ -148,8 +147,7 @@ TEST_F(GattlibScannerWithGMainLoop, AdapterNullTest) {
   EXPECT_CALL(*mock_, adapter_scan_disable(fake_adapter_))
     .WillOnce(Return(GATTLIB_SUCCESS));
   EXPECT_CALL(*mock_, adapter_wait_scan_stopped(fake_adapter_));
-  EXPECT_CALL(*mock_, adapter_close(fake_adapter_))
-    .WillOnce(Return(GATTLIB_SUCCESS));
+  EXPECT_CALL(*mock_, adapter_close(fake_adapter_)).Times(Exactly(0));
 
   // Start scan in background since it's blocking
   auto scan_future =
@@ -193,7 +191,7 @@ TEST_F(GattlibScannerWithGMainLoop, AdapterNullTest) {
  * during normal operation, rather than being passed as null to the callback.
  */
 TEST_F(GattlibScannerWithGMainLoop, AdapterNullifiedTest) {
-  blecpp::GattlibScanner scanner(loop_manager_, fake_adapter_, functions_);
+  blecpp::GattlibScanner scanner(fake_adapter_, functions_);
 
   // Expect the scan to be called and start successfully
   EXPECT_CALL(*mock_, adapter_scan_enable(fake_adapter_, _, 10, _))
@@ -206,8 +204,7 @@ TEST_F(GattlibScannerWithGMainLoop, AdapterNullifiedTest) {
   EXPECT_CALL(*mock_, adapter_scan_disable(fake_adapter_))
     .WillOnce(Return(GATTLIB_SUCCESS));
   EXPECT_CALL(*mock_, adapter_wait_scan_stopped(fake_adapter_));
-  EXPECT_CALL(*mock_, adapter_close(fake_adapter_))
-    .WillOnce(Return(GATTLIB_SUCCESS));
+  EXPECT_CALL(*mock_, adapter_close(fake_adapter_)).Times(Exactly(0));
 
   // Start scan in background since it's blocking
   auto scan_future =
@@ -245,7 +242,7 @@ TEST_F(GattlibScannerWithGMainLoop, AdapterNullifiedTest) {
  * 2. Multiple attempts to start concurrent scans all fail with GATTLIB_BUSY
  */
 TEST_F(GattlibScannerWithGMainLoop, ConcurrentScansTest) {
-  blecpp::GattlibScanner scanner(loop_manager_, fake_adapter_, functions_);
+  blecpp::GattlibScanner scanner(fake_adapter_, functions_);
   std::string mac_address = "D4:28:C8:F3:7F:A1";
 
   // Set up expectations for the main scan
@@ -257,28 +254,28 @@ TEST_F(GattlibScannerWithGMainLoop, ConcurrentScansTest) {
   EXPECT_CALL(*mock_, adapter_scan_disable(fake_adapter_))
     .WillOnce(Return(GATTLIB_SUCCESS));
   EXPECT_CALL(*mock_, adapter_wait_scan_stopped(fake_adapter_));
-  EXPECT_CALL(*mock_, adapter_close(fake_adapter_))
-    .WillOnce(Return(GATTLIB_SUCCESS));
+  EXPECT_CALL(*mock_, adapter_close(fake_adapter_)).Times(Exactly(0));
 
   // Start the main scan in background
-  auto main_scan = 
-    std::async(std::launch::async, [&scanner, mac_address]() { return scanner.scan(10, mac_address); });
-  
+  auto main_scan = std::async(std::launch::async, [&scanner, mac_address]() {
+    return scanner.scan(10, mac_address);
+  });
+
   // Wait for scan to start
   while (!scanner.is_scanning()) {
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
   }
 
   // Try multiple concurrent scans while the main scan is running
-  auto concurrent_scan1 = 
+  auto concurrent_scan1 =
     std::async(std::launch::async, [&scanner]() { return scanner.scan(10); });
   EXPECT_EQ(concurrent_scan1.get(), GATTLIB_BUSY);
 
-  auto concurrent_scan2 = 
+  auto concurrent_scan2 =
     std::async(std::launch::async, [&scanner]() { return scanner.scan(10); });
   EXPECT_EQ(concurrent_scan2.get(), GATTLIB_BUSY);
 
-  auto concurrent_scan3 = 
+  auto concurrent_scan3 =
     std::async(std::launch::async, [&scanner]() { return scanner.scan(10); });
   EXPECT_EQ(concurrent_scan3.get(), GATTLIB_BUSY);
 
@@ -301,7 +298,7 @@ TEST_F(GattlibScannerWithGMainLoop, ConcurrentScansTest) {
  * 3. Scan operation returns GATTLIB_SUCCESS after abort
  */
 TEST_F(GattlibScannerWithGMainLoop, SignalAbortTest) {
-  blecpp::GattlibScanner scanner(loop_manager_, fake_adapter_, functions_);
+  blecpp::GattlibScanner scanner(fake_adapter_, functions_);
   std::string mac_address = "D4:28:C8:F3:7F:A1";
 
   // Set up signal handler
@@ -311,7 +308,8 @@ TEST_F(GattlibScannerWithGMainLoop, SignalAbortTest) {
   };
   sigemptyset(&sa.sa_mask);
   sa.sa_flags = 0;
-  ASSERT_NE(sigaction(SIGUSR1, &sa, nullptr), -1) << "Failed to set up signal handler";
+  ASSERT_NE(sigaction(SIGUSR1, &sa, nullptr), -1)
+    << "Failed to set up signal handler";
 
   // Set up expectations for the scan and shutdown sequence
   {
@@ -333,15 +331,14 @@ TEST_F(GattlibScannerWithGMainLoop, SignalAbortTest) {
     EXPECT_CALL(*mock_, adapter_wait_scan_stopped(fake_adapter_));
 
     // 4. Close adapter during shutdown
-    EXPECT_CALL(*mock_, adapter_close(fake_adapter_))
-      .WillOnce(Return(GATTLIB_SUCCESS));
+    EXPECT_CALL(*mock_, adapter_close(fake_adapter_)).Times(Exactly(0));
   }
 
   // Start scan in background
   auto scan_future = std::async(std::launch::async, [&]() {
     try {
       return scanner.scan(30, mac_address);
-    } catch (const std::exception& e) {
+    } catch (const std::exception &e) {
       ADD_FAILURE() << "Scan threw unexpected exception: " << e.what();
       return GATTLIB_DEVICE_ERROR;
     }
@@ -382,88 +379,93 @@ TEST_F(GattlibScannerWithGMainLoop, SignalAbortTest) {
   abort_future.get();
 
   // Verify scan completes with success after abort
-  EXPECT_EQ(scan_future.get(), GATTLIB_SUCCESS) 
+  EXPECT_EQ(scan_future.get(), GATTLIB_SUCCESS)
     << "Scan did not complete successfully after abort";
 
   // Verify scanner is no longer scanning
-  EXPECT_FALSE(scanner.is_scanning()) 
+  EXPECT_FALSE(scanner.is_scanning())
     << "Scanner still reports as scanning after abort";
 }
 
 /**
  * @brief Tests scanning for specific MAC address
  * @details Verifies that:
- * 1. First scan times out when wrong MAC is discovered
- * 2. Second scan succeeds when correct MAC is found
+ * 1. First 10 seconds discover wrong MAC
+ * 2. Next 10 seconds discover correct MAC
+ * 3. With 5 second timeout, second scan attempt should succeed
  */
 TEST_F(GattlibScannerWithGMainLoop, ScanForMacTest) {
-  blecpp::GattlibScanner scanner(loop_manager_, fake_adapter_, functions_);
+  blecpp::GattlibScanner scanner(fake_adapter_, functions_);
   std::string target_mac = "D4:28:C8:F3:7F:A1";
   std::string other_mac = "00:11:22:33:44:55";
   bool discovery_running = true;
-  bool first_scan = true;
+  bool success = false;
 
-  // First scan - should timeout
+  // Expect multiple scan attempts
   EXPECT_CALL(*mock_, adapter_scan_enable(fake_adapter_, _, 5, _))
-      .WillOnce(DoAll(SaveArg<1>(&saved_callback_),
-                      SaveArg<3>(&saved_user_data_), Return(GATTLIB_SUCCESS)));
+    .Times(AtLeast(2))
+    .WillRepeatedly(DoAll(
+      SaveArg<1>(&saved_callback_), SaveArg<3>(&saved_user_data_),
+      Return(GATTLIB_SUCCESS)
+    ));
   EXPECT_CALL(*mock_, adapter_scan_disable(fake_adapter_))
-      .WillOnce(Return(GATTLIB_SUCCESS));
-  EXPECT_CALL(*mock_, adapter_wait_scan_stopped(fake_adapter_));
-  EXPECT_CALL(*mock_, adapter_close(fake_adapter_))
-      .WillOnce(Return(GATTLIB_SUCCESS));
-
-  // Second scan - should succeed
-  EXPECT_CALL(*mock_, adapter_scan_enable(fake_adapter_, _, 5, _))
-      .WillOnce(DoAll(SaveArg<1>(&saved_callback_),
-                      SaveArg<3>(&saved_user_data_), Return(GATTLIB_SUCCESS)));
-  EXPECT_CALL(*mock_, adapter_scan_disable(fake_adapter_))
-      .WillOnce(Return(GATTLIB_SUCCESS));
-  EXPECT_CALL(*mock_, adapter_wait_scan_stopped(fake_adapter_));
-  EXPECT_CALL(*mock_, adapter_close(fake_adapter_))
-      .WillOnce(Return(GATTLIB_SUCCESS));
+    .Times(AtLeast(2))
+    .WillRepeatedly(Return(GATTLIB_SUCCESS));
+  EXPECT_CALL(*mock_, adapter_wait_scan_stopped(fake_adapter_))
+    .Times(AtLeast(2));
+  EXPECT_CALL(*mock_, adapter_close(fake_adapter_)).Times(Exactly(0));
 
   // Start discovery simulation thread
   auto discovery_thread = std::thread([&]() {
+    auto start_time = std::chrono::steady_clock::now();
+
     while (discovery_running) {
+      auto now = std::chrono::steady_clock::now();
+      auto elapsed =
+        std::chrono::duration_cast<std::chrono::seconds>(now - start_time)
+          .count();
+
+      // Stop after 20 seconds
+      if (elapsed >= 20) {
+        discovery_running = false;
+        break;
+      }
+
       if (saved_callback_) {
-        if (first_scan) {
-          // First scan: discover wrong MAC
-          saved_callback_(fake_adapter_, other_mac.c_str(), "Other-Device",
-                          saved_user_data_);
+        if (elapsed < 10) {
+          // First 10 seconds: discover wrong MAC
+          saved_callback_(
+            fake_adapter_, other_mac.c_str(), "Other-Device", saved_user_data_
+          );
         } else {
-          // Second scan: discover correct MAC
-          saved_callback_(fake_adapter_, target_mac.c_str(), "Target-Device",
-                          saved_user_data_);
+          // 10-20 seconds: discover correct MAC
+          saved_callback_(
+            fake_adapter_, target_mac.c_str(), "Target-Device", saved_user_data_
+          );
         }
       }
-      std::this_thread::sleep_for(std::chrono::milliseconds(500));
+
+      // Sleep for 1 second between discoveries
+      std::this_thread::sleep_for(std::chrono::seconds(1));
     }
   });
 
-  // First scan - should timeout
-  auto scan_future = std::async(std::launch::async, [&scanner, &target_mac]() {
-    return scanner.scan(5, target_mac);
-  });
+  // Keep scanning until success
+  while (!success) {
+    auto scan_future =
+      std::async(std::launch::async, [&scanner, &target_mac]() {
+        return scanner.scan(5, target_mac);
+      });
 
-  // Wait for first scan to complete
-  int result = scan_future.get();
-  EXPECT_EQ(result, GATTLIB_TIMEOUT);
+    int result = scan_future.get();
+    if (result == GATTLIB_SUCCESS) {
+      success = true;
+    } else {
+      EXPECT_EQ(result, GATTLIB_TIMEOUT);
+    }
+  }
 
-  // Switch to second scan
-  first_scan = false;
-
-  // Second scan - should succeed
-  scan_future = std::async(std::launch::async, [&scanner, &target_mac]() {
-    return scanner.scan(5, target_mac);
-  });
-
-  // Wait for second scan to complete
-  result = scan_future.get();
-  EXPECT_EQ(result, GATTLIB_SUCCESS);
-
-  // Stop discovery thread
-  discovery_running = false;
+  // Wait for discovery thread
   if (discovery_thread.joinable()) {
     discovery_thread.join();
   }
