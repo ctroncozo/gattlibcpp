@@ -1,150 +1,148 @@
-GattLib is a library used to access Generic Attribute Profile (GATT) protocol of BLE (Bluetooth Low Energy) devices.
-It has been introduced to allow to build applications that could easily communicate with BLE devices.
+# 🔗 Gattlib C++
 
-It supports Bluez v4 and v5.
+<div align="center">
 
-Latest GattLib Release packages
-===============================
+[![License: LGPL v3](https://img.shields.io/badge/License-LGPL%20v3-blue.svg)](https://www.gnu.org/licenses/lgpl-3.0)
+[![Platform](https://img.shields.io/badge/platform-linux-lightgrey)](https://github.com/labapart/gattlib)
+[![C++](https://img.shields.io/badge/C++-17-blue.svg)](https://en.cppreference.com/w/cpp/17)
 
-* The latest release can be found [here](https://github.com/labapart/gattlib/releases/latest). It contains:
+**A modern C++ wrapper for BlueZ's GATT library**
+</div>
 
-- Prebuilt Debian, RPM and ZIP packages for x86_64 and Bluez v5.x
-- Packages for ARM 32bit and 64bit would have to be built by the developer - see section [Package GattLib](#package-gattlib).
+## 📖 Overview (work in progress)
 
-- Prebuilt Python packages are available on [Pypi repository](https://pypi.org/project/gattlib-py/).
+This project is fork of the original C implementation [labapart/gattlib](https://github.com/labapart/gattlib). Implements modern C++ wrapper to Bluetooth Low Energy (BLE) library on Linux. Built on top of BlueZ and Dbus, it provides a safe, efficient, and idiomatic C++ interface for BLE operations.
 
-Build GattLib
-=============
+## ✨ Features
 
-* Gattlib requires the following packages: `libbluetooth-dev`, `libreadline-dev`.  
-On Debian based system (such as Ubuntu), you can installed these packages with the
-following command: `sudo apt install libbluetooth-dev libreadline-dev`
+### 🔄 Modern C++ Design
+- **RAII-compliant** resource management
+- **Smart pointer** usage throughout
+- **Exception-safe** error handling
+- **PIMPL idiom** for ABI stability
 
-```
-cd <gattlib-src-root>
-mkdir build && cd build
-cmake ..
-make
-```
+### 🛠️ Core Functionality
+- **✅ BLE Scanner**
+  - Asynchronous device discovery
+  - MAC address filtering
+  - Signal-based abort mechanism
+- **🔄 Connection Manager** (In Progress)
+  - GATT operations
+  - Service discovery
+  - Characteristic read/write
 
-* Gattlib can also be built for a specific version of Bluez by specifying its version at build time:
+### 🧪 Quality Assurance
+- **Comprehensive test suite**
+  - Unit tests with Google Test
+  - Mock BLE adapter support
+  - CI/CD integration ready
+- **Memory safety** improvements
+  - Fixed memory leaks in C core
+  - RAII-based cleanup
 
-```
-mkdir build && cd build
-cmake -DBLUEZ_VERSION=5.50 ..
-make
-```
+## 🚀 Getting Started
 
+### Prerequisites
+- Linux system with BlueZ
+- CMake 3.16 or higher
+- C++17 compiler
+- Development packages:
+  ```bash
+  sudo apt install libglib2.0-dev libbluetooth-dev
+  ```
 
-* **On Bluez versions prior to v5.42**, gattlib used Bluez source code while it uses D-Bus API 
-from v5.42. D-Bus API can be used on version prior to Bluez v5.42 by using the CMake flag `-DGATTLIB_FORCE_DBUS=TRUE`:
+### Build Instructions
 
-```
-mkdir build && cd build
-cmake -DGATTLIB_FORCE_DBUS=TRUE ..
-make
-```
+1. **Clone the Repository**
+   ```bash
+   git clone https://github.com/your-username/gattlib.git
+   cd gattlib
+   ```
 
-### Cross-Compilation
+2. **Create Build Directory**
+   ```bash
+   mkdir build && cd build
+   ```
 
-To cross-compile GattLib, you must provide the following environment variables:
+3. **Configure and Build**
+   ```bash
+   cmake ..
+   make -j$(nproc)
+   ```
 
-- `CROSS_COMPILE`: prefix of your cross-compile toolchain
-- `SYSROOT`: an existing system root that contains the libraries and include files required by your application
+4. **Run Tests** (Optional)
+   ```bash
+   ctest --output-on-failure
+   ```
 
-Example:
+## 📚 Documentation
 
-```
-cd <gattlib-src-root>
-mkdir build && cd build
-export CROSS_COMPILE=~/Toolchains/gcc-linaro-4.9-2015.05-x86_64_arm-linux-gnueabihf/bin/arm-linux-gnueabihf-
-export SYSROOT=~/Distributions/debian-wheezy
-cmake ..
-make
-```
+### Example Usage
+```cpp
+#include <gattlib_scanner.hpp>
 
-Package GattLib
-===============
-
-From the build directory: `cpack ..`
-
-**Note:** It generates DEB, RPM and ZIP packages. Ensure you have the expected dependencies
- installed on your system (eg: to generate RPM package on Debian-based Linux distribution
-  you must have `rpm` package installed).
-
-Default install directory is defined as /usr by CPack variable `CPACK_PACKAGE_INSTALL_DIRECTORY`.  
-To change the install directory to `/usr/local` run: `cpack -DCPACK_PACKAGE_INSTALL_DIRECTORY=/usr/local ..`
-
-Examples
-========
-
-* [Demonstrate discovering of primary services and characteristics](/examples/discover/discover.c):
-
-        ./examples/discover/discover 78:A5:04:22:45:4F
-
-* [Demonstrate characteristic read/write](/examples/read_write/read_write.c):
-
-        ./examples/read_write/read_write 78:A5:04:22:45:4F read 00002a29-0000-1000-8000-00805f9b34fb
-        ./examples/read_write/read_write 78:A5:04:22:45:4F write 00002a6b-0000-1000-8000-00805f9b34fb 0x1234
-
-* [Demonstrate BLE scanning and connection](/examples/ble_scan/ble_scan.c):
-
-        ./examples/ble_scan/ble_scan
-
-* [Demonstrate GATT notification using GATT Battery service](/examples/notification/notification.c):
-
-        ./examples/notification/notification
-
-* [Demonstrate GATT Write Without Response](/examples/nordic_uart/nordic_uart.c):
-
-        ./examples/nordic_uart/nordic_uart
-
-**Note 1:** [The example 'read/write mem'](/examples/read_write_mem/read_write.c) is similar to
-[the example 'read/write'](/examples/read_write/read_write.c) except a GLib loop is used to allows
-the memory to be freed by Glib. Without this loop, some memory could be locked.
-
-**Note 2:** `examples/gatttool` has been partially ported to gattlib. There are two reasons: the laziness
- (some of the GATT functions could be replaced by their gattlib equivalent) and the completeness (there
- are still some missing functions in gattlib).
-
-* Notification is also supported. Example:
-
-```
-void notification_cb(uint16_t handle, const uint8_t* data, size_t data_length, void* user_data) {
-	printf("Notification on handle 0x%02x\n", handle);
-}
-
-main() {
-	uint16_t status_handle; // Handle of the 'status' characteristic
-	uint16_t enable_notification = 0x0001;
-
-	// Enable Status Notification
-	gattlib_write_char_by_handle(connection, status_handle + 1, &enable_notification, sizeof(enable_notification));
-	// Register notification handler
-	gattlib_register_notification(connection, notification_cb, NULL);
+int main() {
+    try {
+        // Create scanner instance
+        blecpp::GattlibScanner scanner;
+        
+        // Scan for devices (5 second timeout)
+        scanner.scan(5);
+        
+        // Or scan for specific device
+        scanner.scan(5, "00:11:22:33:44:55");
+        
+    } catch (const std::exception& e) {
+        std::cerr << "Error: " << e.what() << std::endl;
+        return 1;
+    }
+    return 0;
 }
 ```
 
-Known limitations
------------------
+## 🤝 Contributing
 
-* **gattlib and BLE**: gattlib requires at least Bluez v4.100 to work with Bluetooth Low Energy (BLE) devices. Bluez does not allow to connect to BLE device prior to this version. But gattlib can still work with Bluetooth Classic (BR/EDR) prior to Bluez v4.100.  
-Debian 7 "Wheezy" (supported until 31st of May 2018) relies on Bluez v4.99 while Debian 8 "Jessie" (supported until April/May 2020) uses Bluez v5.23.
+Contributions are welcome! Please feel free to submit a Pull Request. For major changes, please open an issue first to discuss what you would like to change.
 
-TODO List
-=========
+## 📄 License
 
-- Complete `examples/gatttool` port to GattLib to demonstrate the completeness of GattLib.
-- Remove GLib dependencies to GattLib (mainly replacing GLib IO Channels by Unix Domain Socket).
+This project is licensed under the LGPL-3.0 License - see the [LICENSE](LICENSE) file for details.
 
-License
-=======
+## 🙏 Acknowledgments
 
-Gattlib with Bluez Legacy support (for Bluez v4) has a GPL v2.0 or later license.  
-While Gattlib for recent version of Bluez (v5.40+) has a BSD-3-Clause license - except `dbus/bluez5/lib/uuid.c`
-and `dbus/bluez5/lib/uuid.h` that have a GPL v2.0 or later license.
+- Original [gattlib](https://github.com/labapart/gattlib) developers
+- BlueZ project team
+- All contributors to this modern C++ fork
 
-Support
-=======
+## 📁 Project Structure
 
-Commercial Support can be obtained through [Lab A Part](https://labapart.com). Please contact us: [https://labapart.com/about/](https://labapart.com/about/).
+```
+gattlib/
+├── cpp/             # Modern C++ wrapper for BLE APIs
+│   ├── include/
+│   ├── src/
+│   └── tests/
+├── bluez/           # BlueZ-related backend logic
+├── dbus/            # D-Bus integration for BlueZ v5
+├── examples/        # Example programs
+├── gattlib-py/      # Python bindings
+└── CMakeLists.txt   # Build configuration
+```
+
+## ⚖️ Why This Fork?
+
+The goal of this fork is to provide:
+- A modern, idiomatic C++ API for BLE development
+- Cleaner, safer abstractions over the C-based `gattlib`
+- Easier integration in modern CMake-based C++ projects
+- Fix memory leaks and improve maintainability of the original C core
+
+I hope this helps developers who want the power of `gattlib` in a more modern form.
+
+## 📫 Contact
+Cristian Troncoso [Linkedin](www.linkedin.com/in/cristian-troncoso-05563b139)
+
+
+---
+
+> “Built on the shoulders of giants.” — Thanks to the original `gattlib` authors.
