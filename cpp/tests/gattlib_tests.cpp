@@ -239,89 +239,6 @@ TEST_F(GattlibScannerWithGMainLoop, AdapterNullifiedTest) {
 }
 
 /**
- * @brief Tests that multiple scan calls work correctly
- * @details Verifies that:
- * 1. Multiple sequential scans work
- * 2. Scanner properly cleans up between scans
- * 3. Cannot start a new scan while one is in progress
- * 4. Scanner remains usable after a scan failure
- */
-TEST_F(GattlibScannerWithGMainLoop, MultipleScansTest) {
-  blecpp::GattlibScanner scanner(loop_manager_, fake_adapter_, functions_);
-
-  // First successful scan
-  EXPECT_CALL(*mock_, adapter_scan_enable(fake_adapter_, _, 5, _))
-    .WillOnce(DoAll(
-      SaveArg<1>(&saved_callback_), SaveArg<3>(&saved_user_data_),
-      Return(GATTLIB_SUCCESS)
-    ));
-  EXPECT_CALL(*mock_, adapter_scan_disable(fake_adapter_))
-    .WillOnce(Return(GATTLIB_SUCCESS));
-  EXPECT_CALL(*mock_, adapter_wait_scan_stopped(fake_adapter_));
-  EXPECT_CALL(*mock_, adapter_close(fake_adapter_))
-    .WillOnce(Return(GATTLIB_SUCCESS));
-
-  auto scan_future1 = 
-    std::async(std::launch::async, [&scanner]() { return scanner.scan(5); });
-  
-  // Wait for scan to start
-  while (!scanner.is_scanning()) {
-    std::this_thread::sleep_for(std::chrono::milliseconds(100));
-  }
-
-  // Simulate device discovery
-  if (saved_callback_) {
-    saved_callback_(
-      fake_adapter_, "D4:28:C8:F3:7F:A1", "Device-1", saved_user_data_
-    );
-  }
-
-  EXPECT_EQ(scan_future1.get(), GATTLIB_SUCCESS);
-
-  // Verify we can't start a scan while one is in progress
-  auto concurrent_scan = 
-    std::async(std::launch::async, [&scanner]() { return scanner.scan(1); });
-  EXPECT_EQ(concurrent_scan.get(), GATTLIB_ERROR);
-
-  // Second scan that fails
-  EXPECT_CALL(*mock_, adapter_scan_enable(fake_adapter_, _, 5, _))
-    .WillOnce(Return(GATTLIB_ERROR));
-
-  auto scan_future2 = 
-    std::async(std::launch::async, [&scanner]() { return scanner.scan(5); });
-  EXPECT_EQ(scan_future2.get(), GATTLIB_ERROR);
-
-  // Third successful scan after a failure
-  EXPECT_CALL(*mock_, adapter_scan_enable(fake_adapter_, _, 5, _))
-    .WillOnce(DoAll(
-      SaveArg<1>(&saved_callback_), SaveArg<3>(&saved_user_data_),
-      Return(GATTLIB_SUCCESS)
-    ));
-  EXPECT_CALL(*mock_, adapter_scan_disable(fake_adapter_))
-    .WillOnce(Return(GATTLIB_SUCCESS));
-  EXPECT_CALL(*mock_, adapter_wait_scan_stopped(fake_adapter_));
-  EXPECT_CALL(*mock_, adapter_close(fake_adapter_))
-    .WillOnce(Return(GATTLIB_SUCCESS));
-
-  auto scan_future3 = 
-    std::async(std::launch::async, [&scanner]() { return scanner.scan(5); });
-
-  // Wait for scan to start
-  while (!scanner.is_scanning()) {
-    std::this_thread::sleep_for(std::chrono::milliseconds(100));
-  }
-
-  // Simulate device discovery
-  if (saved_callback_) {
-    saved_callback_(
-      fake_adapter_, "D4:28:C8:F3:7F:A2", "Device-2", saved_user_data_
-    );
-  }
-
-  EXPECT_EQ(scan_future3.get(), GATTLIB_SUCCESS);
-}
-
-/**
  * @brief Tests that concurrent scan calls are rejected
  * @details Verifies that:
  * 1. Cannot start a new scan while one is in progress
@@ -471,4 +388,83 @@ TEST_F(GattlibScannerWithGMainLoop, SignalAbortTest) {
   // Verify scanner is no longer scanning
   EXPECT_FALSE(scanner.is_scanning()) 
     << "Scanner still reports as scanning after abort";
+}
+
+/**
+ * @brief Tests scanning for specific MAC address
+ * @details Verifies that:
+ * 1. First scan times out when wrong MAC is discovered
+ * 2. Second scan succeeds when correct MAC is found
+ */
+TEST_F(GattlibScannerWithGMainLoop, ScanForMacTest) {
+  blecpp::GattlibScanner scanner(loop_manager_, fake_adapter_, functions_);
+  std::string target_mac = "D4:28:C8:F3:7F:A1";
+  std::string other_mac = "00:11:22:33:44:55";
+  bool discovery_running = true;
+  bool first_scan = true;
+
+  // First scan - should timeout
+  EXPECT_CALL(*mock_, adapter_scan_enable(fake_adapter_, _, 5, _))
+      .WillOnce(DoAll(SaveArg<1>(&saved_callback_),
+                      SaveArg<3>(&saved_user_data_), Return(GATTLIB_SUCCESS)));
+  EXPECT_CALL(*mock_, adapter_scan_disable(fake_adapter_))
+      .WillOnce(Return(GATTLIB_SUCCESS));
+  EXPECT_CALL(*mock_, adapter_wait_scan_stopped(fake_adapter_));
+  EXPECT_CALL(*mock_, adapter_close(fake_adapter_))
+      .WillOnce(Return(GATTLIB_SUCCESS));
+
+  // Second scan - should succeed
+  EXPECT_CALL(*mock_, adapter_scan_enable(fake_adapter_, _, 5, _))
+      .WillOnce(DoAll(SaveArg<1>(&saved_callback_),
+                      SaveArg<3>(&saved_user_data_), Return(GATTLIB_SUCCESS)));
+  EXPECT_CALL(*mock_, adapter_scan_disable(fake_adapter_))
+      .WillOnce(Return(GATTLIB_SUCCESS));
+  EXPECT_CALL(*mock_, adapter_wait_scan_stopped(fake_adapter_));
+  EXPECT_CALL(*mock_, adapter_close(fake_adapter_))
+      .WillOnce(Return(GATTLIB_SUCCESS));
+
+  // Start discovery simulation thread
+  auto discovery_thread = std::thread([&]() {
+    while (discovery_running) {
+      if (saved_callback_) {
+        if (first_scan) {
+          // First scan: discover wrong MAC
+          saved_callback_(fake_adapter_, other_mac.c_str(), "Other-Device",
+                          saved_user_data_);
+        } else {
+          // Second scan: discover correct MAC
+          saved_callback_(fake_adapter_, target_mac.c_str(), "Target-Device",
+                          saved_user_data_);
+        }
+      }
+      std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    }
+  });
+
+  // First scan - should timeout
+  auto scan_future = std::async(std::launch::async, [&scanner, &target_mac]() {
+    return scanner.scan(5, target_mac);
+  });
+
+  // Wait for first scan to complete
+  int result = scan_future.get();
+  EXPECT_EQ(result, GATTLIB_TIMEOUT);
+
+  // Switch to second scan
+  first_scan = false;
+
+  // Second scan - should succeed
+  scan_future = std::async(std::launch::async, [&scanner, &target_mac]() {
+    return scanner.scan(5, target_mac);
+  });
+
+  // Wait for second scan to complete
+  result = scan_future.get();
+  EXPECT_EQ(result, GATTLIB_SUCCESS);
+
+  // Stop discovery thread
+  discovery_running = false;
+  if (discovery_thread.joinable()) {
+    discovery_thread.join();
+  }
 }
