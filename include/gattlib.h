@@ -764,6 +764,10 @@ void gattlib_log(int level, const char *format, ...);
 
 int gattlib_mainloop(void* (*task)(void* arg), void *arg);
 
+bool gattlib_adapter_still_scanning(gattlib_adapter_t* adapter);
+
+void gattlib_adapter_wait_scan_stopped(gattlib_adapter_t* adapter);
+
 #ifdef __cplusplus
 }
 #endif

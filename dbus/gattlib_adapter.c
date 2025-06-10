@@ -5,8 +5,9 @@
  */
 
 #include "gattlib_internal.h"
+#include <time.h>
 
-// This recursive mutex ensures all gattlib objects can be accessed in a multi-threaded environmerssi_variantnt
+// This recursive mutex ensures all gattlib objects can be accessed in a multi-threaded environment
 // The recursive mutex allows a same thread to lock twice the mutex without being blocked by itself.
 GRecMutex m_gattlib_mutex;
 
@@ -307,8 +308,14 @@ static void _wait_scan_loop_stop_scanning(gattlib_adapter_t* gattlib_adapter) {
 	g_mutex_lock(&m_gattlib_signal.mutex);
 	while (gattlib_adapter_is_scanning(gattlib_adapter)) {
 		g_cond_wait(&m_gattlib_signal.condition, &m_gattlib_signal.mutex);
+		GATTLIB_LOG(GATTLIB_DEBUG, "BLE scan loop thread waiting stopped");
 	}
 	g_mutex_unlock(&m_gattlib_signal.mutex);
+}
+
+// PUBLIC: Wait for BLE scan to finish (race-free, signal-based)
+void gattlib_adapter_wait_scan_stopped(gattlib_adapter_t* gattlib_adapter) {
+	_wait_scan_loop_stop_scanning(gattlib_adapter);
 }
 
 /**
@@ -534,6 +541,9 @@ int gattlib_adapter_scan_enable_with_filter(gattlib_adapter_t* adapter, uuid_t *
 		g_error_free(error);
 		ret = GATTLIB_ERROR_INTERNAL;
 		goto EXIT;
+	}else{
+		g_thread_unref(adapter->backend.ble_scan.scan_loop_thread);
+		adapter->backend.ble_scan.scan_loop_thread = NULL;
 	}
 
 	// We need to release the mutex to ensure we leave the other thread to signal us
@@ -556,8 +566,10 @@ int gattlib_adapter_scan_enable_with_filter(gattlib_adapter_t* adapter, uuid_t *
 	}
 
 	// Free thread
-	g_thread_unref(adapter->backend.ble_scan.scan_loop_thread);
-	adapter->backend.ble_scan.scan_loop_thread = NULL;
+	if(adapter->backend.ble_scan.scan_loop_thread != NULL){
+		g_thread_unref(adapter->backend.ble_scan.scan_loop_thread);
+		adapter->backend.ble_scan.scan_loop_thread = NULL;
+	}
 
 EXIT:
 	g_rec_mutex_unlock(&m_gattlib_mutex);
@@ -590,10 +602,19 @@ int gattlib_adapter_scan_enable_with_filter_non_blocking(gattlib_adapter_t* adap
 		g_error_free(error);
 		ret = GATTLIB_ERROR_INTERNAL;
 		goto EXIT;
+	}else{
+		g_thread_unref(adapter->backend.ble_scan.scan_loop_thread);
+		adapter->backend.ble_scan.scan_loop_thread = NULL;
 	}
 
 EXIT:
 	g_rec_mutex_unlock(&m_gattlib_mutex);
+	if(error) {
+		GATTLIB_LOG(GATTLIB_DEBUG, "[DEBUG LEAK] error: %s", error->message);
+	}
+	else{
+		GATTLIB_LOG(GATTLIB_DEBUG, "[DEBUG LEAK] no error");
+	}
 	return ret;
 }
 
@@ -775,3 +796,12 @@ EXIT:
 	g_rec_mutex_unlock(&m_gattlib_mutex);
 	return ret;
 }
+
+bool gattlib_adapter_still_scanning(gattlib_adapter_t* adapter){
+	bool ret = false;
+	g_rec_mutex_lock(&m_gattlib_mutex);
+	ret = adapter->backend.ble_scan.is_scanning;
+	g_rec_mutex_unlock(&m_gattlib_mutex);
+	return ret;
+}
+

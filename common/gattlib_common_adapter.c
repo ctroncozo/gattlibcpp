@@ -5,6 +5,7 @@
  */
 
 #include "gattlib_internal.h"
+#include <ctype.h>
 
 // Keep track of the allocated adapters to avoid an adapter to be freed twice.
 // It could happen when using Python wrapper.
