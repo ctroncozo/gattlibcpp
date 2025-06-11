@@ -1,0 +1,56 @@
+---
+# Enable a broad set of useful Clang-Tidy checks:
+# - clang-analyzer: static analysis (e.g., memory, logic)
+# - modernize: helps adopt C++11/14/17/20 features
+# - performance: finds inefficiencies
+# - readability: enforces consistent, readable code
+# - bugprone: catches likely bugs
+# - llvm: aligns with LLVM project coding practices
+# - misc: general helpful checks
+# - cppcoreguidelines: C++ Core Guidelines (opt-in, best practices)
+Checks: >
+  clang-analyzer-*,
+  modernize-*,
+  performance-*,
+  readability-*,
+  bugprone-*,
+  llvm-*,
+  misc-*,
+  cppcoreguidelines-*,
+  -modernize-use-trailing-return-type,        # Not LLVM-preferred
+  -cppcoreguidelines-pro-type-vararg,         # Some projects use printf/scanf
+  -cppcoreguidelines-owning-memory,           # May be too restrictive
+  -cppcoreguidelines-pro-bounds-array-to-pointer-decay  # Often noisy
+
+# Additional options for check customization
+CheckOptions:
+  # Enforce LLVM-style naming conventions
+  - { key: readability-identifier-naming.ClassCase,                  value: CamelCase }
+  - { key: readability-identifier-naming.StructCase,                 value: CamelCase }
+  - { key: readability-identifier-naming.EnumCase,                   value: CamelCase }
+  - { key: readability-identifier-naming.FunctionCase,               value: camelBack }
+  - { key: readability-identifier-naming.VariableCase,               value: camelBack }
+  - { key: readability-identifier-naming.ParameterCase,              value: camelBack }
+  - { key: readability-identifier-naming.PrivateMemberPrefix,        value: m_ }
+  - { key: readability-identifier-naming.GlobalConstantCase,         value: UPPER_CASE }
+  - { key: readability-identifier-naming.MacroDefinitionCase,        value: UPPER_CASE }
+
+  # Encourage use of 'override' in derived classes
+  - { key: modernize-use-override.IgnoreDestructors, value: false }
+
+  # Don't apply 'default' constructor suggestion to macros
+  - { key: modernize-use-default.IgnoreMacros, value: true }
+
+# ✅ Treat all warnings from checks as errors (strict mode)
+WarningsAsErrors: '*'
+
+
+# ✅ Use .clang-format from this directory for formatting suggestions
+FormatStyle: .clang-format
+
+# ✅ Analyze all files and headers under this directory
+HeaderFilterRegex: '^(cpp)/'
+
+# Metadata (optional)
+User: Cristian Troncoso
+...
