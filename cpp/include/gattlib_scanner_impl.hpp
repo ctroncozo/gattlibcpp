@@ -52,11 +52,11 @@ private:
     /// Timeout for the scan in seconds
     uint32_t timeout;
     /// Optional MAC address filter
-    std::optional<std::string> device_filter;
+    std::optional<std::string> deviceFilter;
     /// Number of scan attempts remaining
     std::atomic<size_t> attempts {1};
     /// Pointer to the BLE adapter
-    gattlib_adapter_t *adapter_ptr {nullptr};
+    gattlib_adapter_t *adapterPtr {nullptr};
     /// Mutex for thread-safe state access
     std::mutex mtx;
     std::condition_variable cv;
@@ -72,16 +72,25 @@ public:
   /**
    * @brief Constructs a new GattlibScanner.
    */
-  explicit Impl(std::shared_ptr<const GattlibFunctions> functions);
+  explicit Impl(const GattlibFunctions& functions = GattlibFunctions());
 
   /**
    * @brief Constructs a new GattlibScanner with a pre-initialized adapter.
    */
   Impl(
-    gattlib_adapter_t *adapter_ptr,
-    std::shared_ptr<const GattlibFunctions> functions
+    gattlib_adapter_t *adapterPtr,
+    const GattlibFunctions& functions = GattlibFunctions()
   );
 
+  /// Deep copy constructor deleted
+  Impl(const Impl &) = delete;
+  /// Copy operator deleted
+  Impl& operator=(const Impl &) = delete;
+  /// Move constructor deleted
+  Impl(Impl &&) = delete;
+  /// Move operator deleted
+  Impl& operator=(Impl&&) = delete;
+  
   /**
    * @brief Destroys the GattlibScanner.
    */
@@ -90,15 +99,18 @@ public:
   /**
    * @brief The scan method implementation. This method is called by the public
    *        scan method.
+   * @param timeSec Stop the scan after some time passed.
+   * @param deviceAddress [optional] An mac address to scan for. If an address
+   * is passed and the scan don't find it after timeout, it return error.
    * @return int Return a GATTLIB_* error code defined in gattlib.h
    */
-  int scan(uint32_t timeout_sec, std::optional<std::string> device_address);
+  int scan(uint32_t timeoutSec, const std::optional<std::string>& deviceAddress);
 
   /**
    * @brief Checks if a scan is currently in progress.
    * @return true if scanning, false otherwise
    */
-  bool is_scanning() const;
+  [[nodiscard]] bool isScanning() const;
 
   /**
    * @brief The abort method implementation.
@@ -132,11 +144,11 @@ private:
    * @param adapter The BLE adapter that discovered the device
    * @param addr MAC address of the discovered device
    * @param name Name of the discovered device (may be null)
-   * @param user_data Pointer to ScanContext for this scan operation
+   * @param userData Pointer to ScanContext for this scan operation
    */
-  static void on_scan_discovery(
+  static void onScanDiscovery(
     gattlib_adapter_t *adapter, const char *addr, const char *name,
-    void *user_data
+    void *userData
   );
 
   /**
@@ -147,11 +159,11 @@ private:
    * - Ensures scan is not still running
    * - Frees allocated memory and resets state
    *
-   * @param scan_ctx The scan context to clean up
+   * @param scanCtx The scan context to clean up
    * @throws std::runtime_error if cleanup is attempted while scan is still
    * running
    */
-  void cleanup(ScanContext *scan_data);
+  static void cleanup(ScanContext *scanCtx);
 
   /**
    * @brief Perform a complete shutdown of a scan operation.
@@ -169,16 +181,16 @@ private:
    * - Minimal lock scope for state updates
    * - Safe cleanup sequence to prevent resource leaks
    *
-   * @param scan_ctx The scan context to shut down
+   * @param scanCtx The scan context to shut down
    */
-  void shutdown(ScanContext *scan_data);
+  void shutdown(ScanContext *scanCtx);
 
   /**
    * @brief Convert a ScanState to a string.
    * @param state The ScanState to convert
    * @return The string representation of the state
    */
-  static std::string to_string(ScanState state) {
+  static std::string toString(ScanState state) {
     switch (state) {
     case ScanState::SCANNING:
       return "SCANNING";
@@ -197,21 +209,20 @@ private:
     }
   }
 
-private:
   /// GMainLoopManager for BLE operations
-  std::shared_ptr<GMainLoopManager> gmain_loop_manager_ {nullptr};
+  std::shared_ptr<GMainLoopManager> m_gmainLoopManager {nullptr};
   /// Pointer to the BLE adapter
-  gattlib_adapter_t *adapter_ptr_ {nullptr};
+  gattlib_adapter_t *m_adapterPtr {nullptr};
   /// GattlibFunctions for gattlib operations
-  std::shared_ptr<const GattlibFunctions> gattlib_functions_ {nullptr};
+  const GattlibFunctions& m_gattlibFunctions;
   /// Flag indicating if a scan is currently in progress
-  std::atomic<bool> scanning_ {false};
+  std::atomic<bool> m_scanning {false};
   /// Shared flag to safely stop callbacks after Scanner destruction.
   /// Must be a shared_ptr to outlive the Scanner instance since C callbacks
   /// may still be active. Must be atomic for thread-safe access from callbacks.
-  std::shared_ptr<std::atomic<bool>> abort_ {nullptr};
+  std::shared_ptr<std::atomic<bool>> m_abort {nullptr};
   /// Flag indicating if the adapter was opened by the scanner
-  bool adapter_owned_ {false};
+  bool m_adapterOwned {false};
 };
 
 } // namespace blecpp

@@ -8,11 +8,13 @@
 
 #include "gattlib_utils.hpp"
 
-#include "gattlib.h"
+// NOLINTBEGIN(*) Do not check the library
+#include <gattlib.h>
+// NOLINTEND(*)
 
 namespace blecpp {
-std::string gattLibErrorToString(int error_code) {
-  switch (error_code) {
+std::string gattLibErrorToString(int errorCode) {
+  switch (errorCode) {
   case GATTLIB_SUCCESS:
     return "GATTLIB_SUCCESS";
   case GATTLIB_INVALID_PARAMETER:

@@ -140,8 +140,8 @@ public:
    * mock functions into the gattlib API.
    */
   static int
-    mock_adapter_open(const char *adapter_name, gattlib_adapter_t **adapter) {
-    return getInstance().adapter_open(adapter_name, adapter);
+    mockAdapterOpen(const char *adapterName, gattlib_adapter_t **adapter) {
+    return getInstance().adapter_open(adapterName, adapter);
   }
 
   /**
@@ -151,7 +151,7 @@ public:
    * function pointers, which can be used in production code to inject the
    * mock functions into the gattlib API.
    */
-  static int mock_adapter_close(gattlib_adapter_t *adapter) {
+  static int mockAdapterClose(gattlib_adapter_t *adapter) {
     return getInstance().adapter_close(adapter);
   }
 
@@ -162,12 +162,12 @@ public:
    * function pointers, which can be used in production code to inject the
    * mock functions into the gattlib API.
    */
-  static int mock_adapter_scan_enable(
+  static int mockAdapterScanEnable(
     gattlib_adapter_t *adapter, gattlib_discovered_device_t callback,
-    size_t timeout, void *user_data
+    size_t timeout, void *userData
   ) {
     return getInstance().adapter_scan_enable(
-      adapter, callback, timeout, user_data
+      adapter, callback, timeout, userData
     );
   }
 
@@ -178,7 +178,7 @@ public:
    * function pointers, which can be used in production code to inject the
    * mock functions into the gattlib API.
    */
-  static int mock_adapter_scan_disable(gattlib_adapter_t *adapter) {
+  static int mockAdapterScanDisable(gattlib_adapter_t *adapter) {
     return getInstance().adapter_scan_disable(adapter);
   }
 
@@ -189,7 +189,7 @@ public:
    * function pointers, which can be used in production code to inject the
    * mock functions into the gattlib API.
    */
-  static void mock_adapter_wait_scan_stopped(gattlib_adapter_t *adapter) {
+  static void mockAdapterWaitScanStopped(gattlib_adapter_t *adapter) {
     getInstance().adapter_wait_scan_stopped(adapter);
   }
 
@@ -202,13 +202,13 @@ public:
    *
    * @return GattlibFunctions struct containing all mock functions
    */
-  blecpp::GattlibFunctions getMockFunctions() {
+  static blecpp::GattlibFunctions getMockFunctions() {
     blecpp::GattlibFunctions fns;
-    fns.adapter_open = &mock_adapter_open;
-    fns.adapter_close = &mock_adapter_close;
-    fns.adapter_scan_enable = &mock_adapter_scan_enable;
-    fns.adapter_scan_disable = &mock_adapter_scan_disable;
-    fns.adapter_wait_scan_stopped = &mock_adapter_wait_scan_stopped;
+    fns.adapterOpen = &mockAdapterOpen;
+    fns.adapterClose = &mockAdapterClose;
+    fns.adapterScanEnable = &mockAdapterScanEnable;
+    fns.adapterScanDisable = &mockAdapterScanDisable;
+    fns.adapterWaitScanStopped = &mockAdapterWaitScanStopped;
     return fns;
   }
 

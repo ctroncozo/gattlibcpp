@@ -8,7 +8,10 @@
 
 #pragma once
 
-#include "gattlib.h"
+// NOLINTBEGIN(*) Do not check the library
+#include <gattlib.h>
+// NOLINTEND(*)
+
 
 #include <cstddef>
 
@@ -37,11 +40,11 @@ namespace blecpp {
  * Example usage with real functions:
  * @code
  * GattlibFunctions functions;
- * functions.adapter_open = &gattlib_adapter_open;
- * functions.adapter_close = &gattlib_adapter_close;
- * functions.adapter_scan_enable = &gattlib_adapter_scan_enable;
- * functions.adapter_scan_disable = &gattlib_adapter_scan_disable;
- * functions.adapter_wait_scan_stopped = &gattlib_adapter_wait_scan_stopped;
+ * functions.adapterOpen = &gattlib_adapter_open;
+ * functions.adapterClose = &gattlib_adapter_close;
+ * functions.adapterScanEnable = &gattlib_adapter_scan_enable;
+ * functions.adapterScanDisable = &gattlib_adapter_scan_disable;
+ * functions.adapterWaitScanStopped = &gattlib_adapter_wait_scan_stopped;
  *
  * GattlibScanner scanner("hci0", functions);
  * scanner.scan(5, 3, "00:11:22:33:44:55");
@@ -51,7 +54,8 @@ namespace blecpp {
  * @code
  * // Using lambda functions for simple mocks
  * GattlibFunctions mock_functions;
- * mock_functions.adapter_open = [](const char*, gattlib_adapter_t** adapter) {
+ * mock_functions.adapterOpen = [](const char* adapterName, gattlib_adapter_t**
+adapter) {
  *   *adapter = reinterpret_cast<gattlib_adapter_t*>(0x1234);  // Fake pointer
  *   return GATTLIB_SUCCESS;
  * };
@@ -71,12 +75,12 @@ struct GattlibFunctions {
    *
    * Corresponds to gattlib_adapter_open() in the gattlib API.
    *
-   * @param adapter_name Name of the adapter to open (e.g., "hci0")
+   * @param adapterName Name of the adapter to open (e.g., "hci0")
    * @param adapter Pointer to store the opened adapter handle
    * @return GATTLIB_SUCCESS on success, or a GATTLIB_* error code
    */
   using AdapterOpenFn =
-    int (*)(const char *adapter_name, gattlib_adapter_t **adapter);
+    int (*)(const char *adapterName, gattlib_adapter_t **adapter);
 
   /**
    * @brief Function pointer type for closing a Bluetooth adapter
@@ -96,12 +100,12 @@ struct GattlibFunctions {
    * @param adapter Handle to the adapter to use for scanning
    * @param callback Function to call when a device is discovered
    * @param timeout Timeout for scanning in seconds (0 for indefinite)
-   * @param user_data User data to pass to the callback
+   * @param userData User data to pass to the callback
    * @return GATTLIB_SUCCESS on success, or a GATTLIB_* error code
    */
   using AdapterScanEnableFn = int (*)(
     gattlib_adapter_t *adapter, gattlib_discovered_device_t callback,
-    size_t timeout, void *user_data
+    size_t timeout, void *userData
   );
 
   /**
@@ -124,15 +128,22 @@ struct GattlibFunctions {
   using AdapterWaitScanStoppedFn = void (*)(gattlib_adapter_t *adapter);
 
   /// Function to open a Bluetooth adapter
-  AdapterOpenFn adapter_open;
+  /// NOLINTNEXTLINE
+  AdapterOpenFn adapterOpen {gattlib_adapter_open};
   /// Function to close a Bluetooth adapter
-  AdapterCloseFn adapter_close;
+  /// NOLINTNEXTLINE
+  AdapterCloseFn adapterClose {gattlib_adapter_close};
   /// Function to enable Bluetooth scanning
-  AdapterScanEnableFn adapter_scan_enable;
+  /// NOLINTNEXTLINE
+  AdapterScanEnableFn adapterScanEnable {gattlib_adapter_scan_enable};
   /// Function to disable Bluetooth scanning
-  AdapterScanDisableFn adapter_scan_disable;
+  /// NOLINTNEXTLINE
+  AdapterScanDisableFn adapterScanDisable {gattlib_adapter_scan_disable};
   /// Function to wait for scan to stop
-  void (*adapter_wait_scan_stopped)(gattlib_adapter_t *adapter);
+  /// NOLINTNEXTLINE
+  AdapterWaitScanStoppedFn adapterWaitScanStopped {
+    gattlib_adapter_wait_scan_stopped
+  };
 
   /**
    * @brief Default constructor
@@ -140,19 +151,17 @@ struct GattlibFunctions {
    * Initializes all function pointers to nullptr.
    * You must set all function pointers before using this object.
    */
-  GattlibFunctions()
-    : adapter_open(nullptr), adapter_close(nullptr),
-      adapter_scan_enable(nullptr), adapter_scan_disable(nullptr),
-      adapter_wait_scan_stopped(nullptr) {}
+  GattlibFunctions() = default;
 
   /**
    * @brief Checks if all function pointers are set
    *
    * @return true if all function pointers are non-null, false otherwise
    */
-  bool is_complete() const {
-    return adapter_open && adapter_close && adapter_scan_enable &&
-           adapter_scan_disable && adapter_wait_scan_stopped;
+  [[nodiscard]] bool isComplete() const {
+    return adapterOpen != nullptr && adapterClose != nullptr &&
+           adapterScanEnable != nullptr && adapterScanDisable != nullptr &&
+           adapterWaitScanStopped != nullptr;
   }
 };
 

@@ -12,7 +12,9 @@
 
 #pragma once
 
+// NOLINTBEGIN(*) Do not check the library
 #include <glib.h>
+// NOLINTEND(*)
 
 #include <atomic>
 #include <chrono>
@@ -155,18 +157,18 @@ public:
    * flag.
    * @return True if the loop is considered active, false otherwise.
    */
-  bool is_running() const;
+  [[nodiscard]] bool isRunning() const;
 
 private:
   /// Pointer to the GMainLoop instance.
-  GMainLoop *main_loop_;
+  GMainLoop *m_mainLoop;
   /// std::thread object managing the GMainLoop's execution thread.
-  std::thread glib_thread_;
+  std::thread m_glibThread;
   /// Mutex to protect the start and stop logic, ensuring atomicity of these
   /// operations.
-  std::mutex start_stop_mutex_;
+  std::mutex m_startStopMutex;
   /// Atomic flag indicating whether the GMainLoop is currently running.
-  std::atomic<bool> is_running_;
+  std::atomic<bool> m_isRunning;
 };
 
 } // namespace blecpp

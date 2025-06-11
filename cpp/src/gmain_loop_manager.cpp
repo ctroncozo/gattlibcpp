@@ -40,7 +40,9 @@
 
 #include "log_macros.hpp"
 
+// NOLINTBEGIN(*) Do not check the library
 #include <glib.h>
+// NOLINTEND(*)
 
 #include <future>
 
@@ -58,7 +60,7 @@ namespace blecpp {
  * - Ensures idempotent stop on signal receipt
  * - Prevents signal handler races with atomic state
  */
-GMainLoopManager::GMainLoopManager() : main_loop_(nullptr), is_running_(false) {
+GMainLoopManager::GMainLoopManager() : m_mainLoop(nullptr), m_isRunning(false) {
   BLECPP_LOG_DEBUG("GMainLoopManager created.");
 }
 
@@ -66,15 +68,15 @@ GMainLoopManager::~GMainLoopManager() {
   BLECPP_LOG_DEBUG("GMainLoopManager destroying...");
   try {
     // Use a timeout in destructor to prevent hanging
-    std::future<void> stop_future =
+    std::future<void> stopFuture =
       std::async(std::launch::async, [this]() { stop(); });
 
-    if (stop_future.wait_for(GMainLoopManager::THREAD_STOP_TIMEOUT) ==
+    if (stopFuture.wait_for(GMainLoopManager::THREAD_STOP_TIMEOUT) ==
         std::future_status::timeout) {
       BLECPP_LOG_ERROR("GMainLoopManager: Destructor timeout, forcing cleanup");
       // Force cleanup - detach thread and let OS clean up
-      if (glib_thread_.joinable()) {
-        glib_thread_.detach();
+      if (m_glibThread.joinable()) {
+        m_glibThread.detach();
       }
     }
   } catch (const std::exception &e) {
@@ -116,77 +118,77 @@ GMainLoopManager::~GMainLoopManager() {
  */
 bool GMainLoopManager::start() {
   // Idempotent start: prevent multiple starts and ensure clean state
-  std::lock_guard<std::mutex> lock(start_stop_mutex_);
+  std::lock_guard<std::mutex> lock(m_startStopMutex);
 
   // Return success if already running (idempotent)
-  if (is_running_.load()) {
+  if (m_isRunning.load()) {
     BLECPP_LOG_DEBUG("GMainLoopManager: Already running, start is idempotent.");
     return true;
   }
 
   // Ensure clean state before start
-  if (main_loop_) {
-    g_main_loop_unref(main_loop_);
-    main_loop_ = nullptr;
+  if (m_mainLoop != nullptr) {
+    g_main_loop_unref(m_mainLoop);
+    m_mainLoop = nullptr;
   }
 
   // Create the GMainLoop instance
-  main_loop_ = g_main_loop_new(nullptr, FALSE);
-  if (!main_loop_) {
+  m_mainLoop = g_main_loop_new(nullptr, FALSE);
+  if (m_mainLoop == nullptr) {
     BLECPP_LOG_ERROR("GMainLoopManager: Failed to create GMainLoop.");
     return false;
   }
 
   try {
     // Launch the GMainLoop thread
-    glib_thread_ = std::thread([this]() {
+    m_glibThread = std::thread([this]() {
       BLECPP_LOG_INFO("GMainLoopManager: GMainLoop thread started.");
 
       // First verify main_loop_ is still valid
-      if (!main_loop_) {
+      if (m_mainLoop == nullptr) {
         BLECPP_LOG_ERROR("GMainLoopManager: Main loop invalid at thread start");
         return;
       }
 
       // Run the loop - this will block until quit
-      g_main_loop_run(main_loop_);
+      g_main_loop_run(m_mainLoop);
       BLECPP_LOG_INFO("GMainLoopManager: GMainLoop thread finished.");
     });
-
+    constexpr int kTenSeconds = 10;
     // Wait for the loop to be running
-    auto start_time = std::chrono::steady_clock::now();
-    while (!g_main_loop_is_running(main_loop_)) {
-      if (std::chrono::steady_clock::now() - start_time >
+    auto startTime = std::chrono::steady_clock::now();
+    while (g_main_loop_is_running(m_mainLoop) == FALSE) {
+      if (std::chrono::steady_clock::now() - startTime >
           THREAD_START_TIMEOUT) {
         BLECPP_LOG_ERROR(
           "GMainLoopManager: Timeout waiting for main loop to start"
         );
-        if (main_loop_) {
-          g_main_loop_quit(main_loop_);
-          g_main_loop_unref(main_loop_);
-          main_loop_ = nullptr;
+        if (m_mainLoop != nullptr) {
+          g_main_loop_quit(m_mainLoop);
+          g_main_loop_unref(m_mainLoop);
+          m_mainLoop = nullptr;
         }
-        if (glib_thread_.joinable()) {
-          glib_thread_.detach();
+        if (m_glibThread.joinable()) {
+          m_glibThread.detach();
         }
         return false;
       }
-      std::this_thread::sleep_for(std::chrono::milliseconds(10));
+      std::this_thread::sleep_for(std::chrono::milliseconds(kTenSeconds));
     }
 
-    if (!g_main_loop_is_running(main_loop_)) {
+    if (g_main_loop_is_running(m_mainLoop) == FALSE) {
       BLECPP_LOG_ERROR(
         "GMainLoopManager: Timeout waiting for GMainLoop thread to start"
       );
       // Request loop quit before cleanup
-      if (main_loop_) {
-        g_main_loop_quit(main_loop_);
-        g_main_loop_unref(main_loop_);
-        main_loop_ = nullptr;
+      if (m_mainLoop != nullptr) {
+        g_main_loop_quit(m_mainLoop);
+        g_main_loop_unref(m_mainLoop);
+        m_mainLoop = nullptr;
       }
       // Thread will exit since loop was quit
-      if (glib_thread_.joinable()) {
-        glib_thread_.detach();
+      if (m_glibThread.joinable()) {
+        m_glibThread.detach();
       }
       return false;
     }
@@ -195,14 +197,14 @@ bool GMainLoopManager::start() {
     BLECPP_LOG_ERROR(
       "GMainLoopManager: Failed to start GMainLoop thread: {}", e.what()
     );
-    if (main_loop_) {
-      g_main_loop_unref(main_loop_);
-      main_loop_ = nullptr;
+    if (m_mainLoop != nullptr) {
+      g_main_loop_unref(m_mainLoop);
+      m_mainLoop = nullptr;
     }
     return false;
   }
 
-  is_running_.store(true);
+  m_isRunning.store(true);
   BLECPP_LOG_INFO("GMainLoopManager: Started successfully.");
   return true;
 }
@@ -238,40 +240,40 @@ bool GMainLoopManager::start() {
  */
 void GMainLoopManager::stop() {
   // Prevent concurrent stop operations
-  std::lock_guard<std::mutex> lock(start_stop_mutex_);
+  std::lock_guard<std::mutex> lock(m_startStopMutex);
 
   // First mark as not running to prevent new operations
-  if (!is_running_.exchange(false)) {
+  if (!m_isRunning.exchange(false)) {
     BLECPP_LOG_DEBUG("GMainLoopManager: Already stopped.");
     return;
   }
-
+  constexpr int kTenSeconds = 10;
   try {
     // First quit the loop
-    if (main_loop_ && g_main_loop_is_running(main_loop_)) {
+    if (m_mainLoop != nullptr && g_main_loop_is_running(m_mainLoop) == TRUE) {
       BLECPP_LOG_DEBUG("GMainLoopManager: Requesting GMainLoop quit.");
-      g_main_loop_quit(main_loop_);
+      g_main_loop_quit(m_mainLoop);
     }
 
     // Ensure loop is fully stopped before thread cleanup
-    if (main_loop_) {
-      auto start_time = std::chrono::steady_clock::now();
-      while (g_main_loop_is_running(main_loop_)) {
-        if (std::chrono::steady_clock::now() - start_time >
+    if (m_mainLoop != nullptr) {
+      auto startTime = std::chrono::steady_clock::now();
+      while (g_main_loop_is_running(m_mainLoop) == TRUE) {
+        if (std::chrono::steady_clock::now() - startTime >
             THREAD_STOP_TIMEOUT) {
           BLECPP_LOG_ERROR(
             "GMainLoopManager: Timeout waiting for main loop to stop"
           );
           break;
         }
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        std::this_thread::sleep_for(std::chrono::milliseconds(kTenSeconds));
       }
     }
 
     // Handle thread cleanup
-    if (glib_thread_.joinable()) {
+    if (m_glibThread.joinable()) {
       BLECPP_LOG_DEBUG("GMainLoopManager: Joining GMainLoop thread...");
-      std::thread worker = std::move(glib_thread_);
+      std::thread worker = std::move(m_glibThread);
 
       try {
         // Use shared_ptr for promise to ensure lifetime
@@ -301,8 +303,8 @@ void GMainLoopManager::stop() {
     }
 
     // Finally cleanup GLib resources
-    if (main_loop_) {
-      g_main_loop_unref(main_loop_);
+    if (m_mainLoop != nullptr) {
+      g_main_loop_unref(m_mainLoop);
       BLECPP_LOG_DEBUG("GMainLoopManager: GMainLoop unreferenced.");
     }
 
@@ -313,6 +315,6 @@ void GMainLoopManager::stop() {
   }
 }
 
-bool GMainLoopManager::is_running() const { return is_running_.load(); }
+bool GMainLoopManager::isRunning() const { return m_isRunning.load(); }
 
 } // namespace blecpp

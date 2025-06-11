@@ -13,9 +13,9 @@
 namespace blecpp {
 /**
  * @brief Helper function to convert gattlib errors codes to string
- * @param error_code The error code
+ * @param errorCode The error code
  * @return The string error
  */
-std::string gattLibErrorToString(int error_code);
+std::string gattLibErrorToString(int errorCode);
 
 } // namespace blecpp

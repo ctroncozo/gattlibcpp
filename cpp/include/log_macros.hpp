@@ -18,8 +18,10 @@
 
 #include <concepts>
 
+// NOLINTBEGIN(*) Do not check the library
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <spdlog/spdlog.h>
+// NOLINTEND(*)
 
 namespace blecpp {
 
@@ -148,9 +150,9 @@ public:
     get().critical(fmt, std::forward<Args>(args)...);
   }
 
-private:
   LogManager() = delete; // Prevent instantiation
-};
+
+}; // class LogManager
 
 /// Type alias for the concrete logger type we're using
 using Logger_t = spdlog::logger;
@@ -165,9 +167,9 @@ using Log = LogManager<Logger_t>;
  * These macros provide a simple interface to the logging system.
  * They automatically forward all arguments to the appropriate logging method.
  */
-#define BLECPP_LOG_TRACE(...) ::blecpp::Log::trace(__VA_ARGS__)
-#define BLECPP_LOG_DEBUG(...) ::blecpp::Log::debug(__VA_ARGS__)
-#define BLECPP_LOG_INFO(...) ::blecpp::Log::info(__VA_ARGS__)
-#define BLECPP_LOG_WARN(...) ::blecpp::Log::warn(__VA_ARGS__)
-#define BLECPP_LOG_ERROR(...) ::blecpp::Log::error(__VA_ARGS__)
-#define BLECPP_LOG_CRITICAL(...) ::blecpp::Log::critical(__VA_ARGS__)
+#define BLECPP_LOG_TRACE(...) ::blecpp::Log::trace(__VA_ARGS__)       // NOLINT
+#define BLECPP_LOG_DEBUG(...) ::blecpp::Log::debug(__VA_ARGS__)       // NOLINT
+#define BLECPP_LOG_INFO(...) ::blecpp::Log::info(__VA_ARGS__)         // NOLINT
+#define BLECPP_LOG_WARN(...) ::blecpp::Log::warn(__VA_ARGS__)         // NOLINT
+#define BLECPP_LOG_ERROR(...) ::blecpp::Log::error(__VA_ARGS__)       // NOLINT
+#define BLECPP_LOG_CRITICAL(...) ::blecpp::Log::critical(__VA_ARGS__) // NOLINT

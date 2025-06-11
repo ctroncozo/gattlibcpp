@@ -12,30 +12,30 @@
 // C-style functions that delegate to the mock instance
 extern "C" {
 
-int gattlib_adapter_open(
-  const char *adapter_name, gattlib_adapter_t **adapter
+int gattlibAdapterOpen(
+  const char *adapterName, gattlib_adapter_t **adapter
 ) {
-  return MockGattlib::mock_adapter_open(adapter_name, adapter);
+  return MockGattlib::mockAdapterOpen(adapterName, adapter);
 }
 
-int gattlib_adapter_close(gattlib_adapter_t *adapter) {
-  return MockGattlib::mock_adapter_close(adapter);
+int gattlibAdapterClose(gattlib_adapter_t *adapter) {
+  return MockGattlib::mockAdapterClose(adapter);
 }
 
-int gattlib_adapter_scan_enable(
+int gattlibAdapterScanEnable(
   gattlib_adapter_t *adapter, gattlib_discovered_device_t callback,
-  size_t timeout, void *user_data
+  size_t timeout, void *userData
 ) {
-  return MockGattlib::mock_adapter_scan_enable(
-    adapter, callback, timeout, user_data
+  return MockGattlib::mockAdapterScanEnable(
+    adapter, callback, timeout, userData
   );
 }
 
 int gattlib_adapter_scan_disable(gattlib_adapter_t *adapter) {
-  return MockGattlib::mock_adapter_scan_disable(adapter);
+  return MockGattlib::mockAdapterScanDisable(adapter);
 }
 
 void gattlib_adapter_wait_scan_stopped(gattlib_adapter_t *adapter) {
-  MockGattlib::mock_adapter_wait_scan_stopped(adapter);
+  MockGattlib::mockAdapterWaitScanStopped(adapter);
 }
 }

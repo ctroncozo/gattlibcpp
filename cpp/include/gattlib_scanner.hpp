@@ -12,7 +12,9 @@
 
 #include "gattlib_functions.hpp"
 
+// NOLINTBEGIN(*) Do not check the library
 #include <gattlib.h>
+// NOLINTEND(*)
 
 #include <memory>
 #include <optional>
@@ -44,22 +46,23 @@ public:
   /**
    * @brief Constructs a new GattlibScanner.
    *
-   * This constructor creates a new BLE adapter and GLib main loop internally.
-   * The GLib main loop is started and the BLE adapter is opened.
-   * The scanner will own and manage these resources throughout its lifetime.
+   * @details This constructor creates a new BLE adapter and GLib main loop
+   * manger internally. The GMainLoopManager is started and the BLE adapter is
+   * opened. The scanner will own and manage these resources throughout its
+   * lifetime.
    *
    * @param functions Interface for gattlib operations (must not be null)
    * @throws std::invalid_argument if functions is null
    * @throws std::runtime_error if adapter creation fails
    */
-  explicit GattlibScanner(std::shared_ptr<const GattlibFunctions> functions);
+  explicit GattlibScanner(const GattlibFunctions& functions);
 
   /**
    * @brief Constructs a new GattlibScanner with a pre-initialized adapter.
    *
-   * The lifetime of the adapter is managed by the caller. The scanner will use
-   * the adapter provided by the caller and will not take ownership of it.
-   * The caller must ensure the adapter remains valid for the scanner's
+   * @details The lifetime of the adapter is managed by the caller. The scanner
+   * will use the adapter provided by the caller and will not take ownership of
+   * it. The caller must ensure the adapter remains valid for the scanner's
    * lifetime.
    * The GLib main loop is managed by the caller, hence the scanner will not
    * interact with it in any way.
@@ -69,8 +72,8 @@ public:
    * @throws std::invalid_argument if any parameter is null
    */
   GattlibScanner(
-    gattlib_adapter_t *adapter_ptr,
-    std::shared_ptr<const GattlibFunctions> functions
+    gattlib_adapter_t *adapterPtr,
+    const GattlibFunctions& functions
   );
 
   /**
@@ -78,13 +81,14 @@ public:
    */
   ~GattlibScanner();
 
-  // Prevent copying
+  /// Delete copy constructor
   GattlibScanner(const GattlibScanner &) = delete;
+  /// Delete copy operator
   GattlibScanner &operator=(const GattlibScanner &) = delete;
-
-  // Allow moving
-  GattlibScanner(GattlibScanner &&) noexcept;
-  GattlibScanner &operator=(GattlibScanner &&) noexcept;
+  /// Delete moving constructor
+  GattlibScanner(GattlibScanner &&) = delete;
+  /// Delete moving operator
+  GattlibScanner &operator=(GattlibScanner &&) = delete;
 
   /**
    * @brief Initiates a BLE scan.
@@ -110,15 +114,14 @@ public:
    * @throw std::runtime_error if scan fails to start.
    */
   int scan(
-    uint32_t timeout_sec,
-    std::optional<std::string> device_address = std::nullopt
+    uint32_t timeoutSec, const std::optional<std::string>& deviceAddress = std::nullopt
   );
 
   /**
    * @brief Check if scanner is currently scanning
    * @return true if scanning, false otherwise
    */
-  bool is_scanning() const;
+  [[nodiscard]] bool isScanning() const;
 
   /**
    * @brief Abort an ongoing scan operation
@@ -130,7 +133,7 @@ public:
 
 private:
   class Impl;
-  std::unique_ptr<Impl> pimpl_;
+  std::unique_ptr<Impl> m_pimpl;
 };
 
 } // namespace blecpp

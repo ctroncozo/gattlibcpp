@@ -29,37 +29,39 @@ protected:
 
 TEST_F(GMainLoopManagerTest, StartStop) {
   blecpp::GMainLoopManager manager;
-  EXPECT_FALSE(manager.is_running());
+  EXPECT_FALSE(manager.isRunning());
 
   // Start should succeed
   EXPECT_TRUE(manager.start());
-  EXPECT_TRUE(manager.is_running());
+  EXPECT_TRUE(manager.isRunning());
 
   // Second start should be idempotent
   EXPECT_TRUE(manager.start());
-  EXPECT_TRUE(manager.is_running());
+  EXPECT_TRUE(manager.isRunning());
 
   // Stop should succeed
   manager.stop();
-  EXPECT_FALSE(manager.is_running());
+  EXPECT_FALSE(manager.isRunning());
 
   // Second stop should be safe
   manager.stop();
-  EXPECT_FALSE(manager.is_running());
+  EXPECT_FALSE(manager.isRunning());
 }
 
 TEST_F(GMainLoopManagerTest, ConcurrentStartStop) {
   blecpp::GMainLoopManager manager;
-  std::atomic<int> successful_starts {0};
-  std::atomic<bool> keep_running {true};
+  std::atomic<int> successfulStarts {0};
+  std::atomic<bool> keepRunning {true};
 
   // Launch multiple threads that try to start/stop the manager
   std::vector<std::thread> threads;
-  for (int i = 0; i < 4; ++i) {
+  constexpr int kFourThreads = 4;
+  threads.reserve(kFourThreads);
+  for (int i = 0; i < kFourThreads; ++i) {
     threads.emplace_back([&]() {
-      while (keep_running) {
+      while (keepRunning) {
         if (manager.start()) {
-          successful_starts++;
+          successfulStarts++;
         }
         std::this_thread::sleep_for(1ms);
         manager.stop();
@@ -70,16 +72,16 @@ TEST_F(GMainLoopManagerTest, ConcurrentStartStop) {
 
   // Let the threads run for a bit
   std::this_thread::sleep_for(100ms);
-  keep_running = false;
+  keepRunning = false;
 
   // Join all threads
-  for (auto &t : threads) {
-    t.join();
+  for (auto &thread : threads) {
+    thread.join();
   }
 
   // Verify we had some successful starts and the manager is in a valid state
-  EXPECT_GT(successful_starts.load(), 0);
-  EXPECT_FALSE(manager.is_running());
+  EXPECT_GT(successfulStarts.load(), 0);
+  EXPECT_FALSE(manager.isRunning());
 }
 
 TEST_F(GMainLoopManagerTest, DestructorDuringRun) {
@@ -108,28 +110,28 @@ TEST_F(GMainLoopManagerTest, MultipleInstances) {
   EXPECT_TRUE(manager1.start());
   EXPECT_TRUE(manager2.start());
 
-  EXPECT_TRUE(manager1.is_running());
-  EXPECT_TRUE(manager2.is_running());
+  EXPECT_TRUE(manager1.isRunning());
+  EXPECT_TRUE(manager2.isRunning());
 
   // Stop them in reverse order
   manager2.stop();
-  EXPECT_FALSE(manager2.is_running());
-  EXPECT_TRUE(manager1.is_running());
+  EXPECT_FALSE(manager2.isRunning());
+  EXPECT_TRUE(manager1.isRunning());
 
   manager1.stop();
-  EXPECT_FALSE(manager1.is_running());
+  EXPECT_FALSE(manager1.isRunning());
 }
 
 TEST_F(GMainLoopManagerTest, RapidStartStopSequence) {
   blecpp::GMainLoopManager manager;
-
+  constexpr int kFiveTimes = 5;
   // Rapidly start and stop the manager multiple times
-  for (int i = 0; i < 5; ++i) {
+  for (int i = 0; i < kFiveTimes; ++i) {
     EXPECT_TRUE(manager.start()) << "Failed to start on iteration " << i;
-    EXPECT_TRUE(manager.is_running());
+    EXPECT_TRUE(manager.isRunning());
     std::this_thread::sleep_for(1ms);
     manager.stop();
-    EXPECT_FALSE(manager.is_running());
+    EXPECT_FALSE(manager.isRunning());
     std::this_thread::sleep_for(1ms);
   }
 }
@@ -137,21 +139,24 @@ TEST_F(GMainLoopManagerTest, RapidStartStopSequence) {
 TEST_F(GMainLoopManagerTest, StopTimeout) {
   blecpp::GMainLoopManager manager;
   EXPECT_TRUE(manager.start());
-
+  constexpr int kFiveSeconds = 5000;
+  constexpr int kOneSecond = 1000;
   // Add a long-running source that should be interrupted by stop
   g_timeout_add(
-    5000, [](gpointer) -> gboolean { return G_SOURCE_CONTINUE; }, nullptr
+    kFiveSeconds,
+    [](gpointer) -> gboolean { return G_SOURCE_CONTINUE; },
+    nullptr
   );
 
   // Stop should complete quickly despite the long-running source
-  auto start_time = std::chrono::steady_clock::now();
+  auto startTime = std::chrono::steady_clock::now();
   manager.stop();
-  auto stop_duration = std::chrono::steady_clock::now() - start_time;
+  auto stopDuration = std::chrono::steady_clock::now() - startTime;
 
   EXPECT_LT(
-    std::chrono::duration_cast<std::chrono::milliseconds>(stop_duration)
+    std::chrono::duration_cast<std::chrono::milliseconds>(stopDuration)
       .count(),
-    1000 // Should take less than 1 second
+    kOneSecond // Should take less than 1 second
   );
-  EXPECT_FALSE(manager.is_running());
+  EXPECT_FALSE(manager.isRunning());
 }
