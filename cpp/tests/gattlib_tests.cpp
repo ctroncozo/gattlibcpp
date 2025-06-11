@@ -48,14 +48,22 @@ protected:
    */
   void SetUp() override {
     m_mock = &MockGattlib::getInstance();
-    // Create adapter through the mock interface - let the mock implementation handle adapter creation
+    // Create a fake adapter pointer using a properly sized allocation. Will be
+    // cleaned up in TearDown
+    m_fakeAdapter =
+      static_cast<gattlib_adapter_t *>(::operator new(sizeof(void *)));
+
+    // Set up mock to return success and set the adapter pointer
     EXPECT_CALL(*m_mock, adapter_open(testing::_, testing::_))
-      .WillOnce(testing::Return(GATTLIB_SUCCESS));
+      .WillOnce(DoAll(SetArgPointee<1>(m_fakeAdapter), Return(GATTLIB_SUCCESS)));
+
+    // Create adapter through the mock interface
     int result = MockGattlib::mockAdapterOpen("hci0", &m_fakeAdapter);
     EXPECT_EQ(result, GATTLIB_SUCCESS);
     EXPECT_NE(m_fakeAdapter, nullptr);
     m_functions =
-      std::make_shared<blecpp::GattlibFunctions>(MockGattlib::getMockFunctions());
+      std::make_shared<blecpp::GattlibFunctions>(MockGattlib::getMockFunctions()
+      );
     m_loopManager = std::make_shared<blecpp::GMainLoopManager>();
     if (!m_loopManager->start()) {
       throw std::runtime_error("Failed to start GMainLoop");
@@ -156,8 +164,9 @@ TEST_F(GattlibScannerWithGMainLoop, AdapterNullTest) {
   EXPECT_CALL(*m_mock, adapter_close(m_fakeAdapter)).Times(Exactly(0));
 
   // Start scan in background since it's blocking
-  auto scanFuture =
-    std::async(std::launch::async, [&scanner]() { return scanner.scan(kTenSeconds); });
+  auto scanFuture = std::async(std::launch::async, [&scanner]() {
+    return scanner.scan(kTenSeconds);
+  });
 
   // Wait for scan to start
   while (!scanner.isScanning()) {
@@ -214,8 +223,9 @@ TEST_F(GattlibScannerWithGMainLoop, AdapterNullifiedTest) {
   EXPECT_CALL(*m_mock, adapter_close(m_fakeAdapter)).Times(Exactly(0));
 
   // Start scan in background since it's blocking
-  auto scanFuture =
-    std::async(std::launch::async, [&scanner]() { return scanner.scan(kTenSeconds); });
+  auto scanFuture = std::async(std::launch::async, [&scanner]() {
+    return scanner.scan(kTenSeconds);
+  });
 
   // Wait for scan to start
   while (!scanner.isScanning()) {
@@ -254,9 +264,7 @@ TEST_F(GattlibScannerWithGMainLoop, ConcurrentScansTest) {
 
   constexpr int kTenSeconds = 10;
   // Set up expectations for the main scan
-  EXPECT_CALL(
-    *m_mock, adapter_scan_enable(m_fakeAdapter, _, kTenSeconds, _)
-  )
+  EXPECT_CALL(*m_mock, adapter_scan_enable(m_fakeAdapter, _, kTenSeconds, _))
     .WillOnce(DoAll(
       SaveArg<1>(&m_savedCallback), SaveArg<3>(&m_savedUserData),
       Return(GATTLIB_SUCCESS)
@@ -274,7 +282,9 @@ TEST_F(GattlibScannerWithGMainLoop, ConcurrentScansTest) {
   constexpr int kOneHundredMilliseconds = 100;
   // Wait for scan to start
   while (!scanner.isScanning()) {
-    std::this_thread::sleep_for(std::chrono::milliseconds(kOneHundredMilliseconds));
+    std::this_thread::sleep_for(
+      std::chrono::milliseconds(kOneHundredMilliseconds)
+    );
   }
 
   // Try multiple concurrent scans while the main scan is running
@@ -316,7 +326,7 @@ TEST_F(GattlibScannerWithGMainLoop, SignalAbortTest) {
   std::string macAddress = "D4:28:C8:F3:7F:A1";
 
   // Set up signal handler
-  struct sigaction signalHandler{}; // Zero-initialize the struct
+  struct sigaction signalHandler {}; // Zero-initialize the struct
   signalHandler.sa_handler = [](int) {
     // This is just a placeholder, actual abort happens in the test
   };
@@ -331,7 +341,9 @@ TEST_F(GattlibScannerWithGMainLoop, SignalAbortTest) {
     testing::InSequence seq;
     constexpr int kThirtySeconds = 30;
     // 1. Initial scan enable
-    EXPECT_CALL(*m_mock, adapter_scan_enable(m_fakeAdapter, _, kThirtySeconds, _))
+    EXPECT_CALL(
+      *m_mock, adapter_scan_enable(m_fakeAdapter, _, kThirtySeconds, _)
+    )
       .WillOnce(DoAll(
         SaveArg<1>(&m_savedCallback), SaveArg<3>(&m_savedUserData),
         Return(GATTLIB_SUCCESS)
@@ -361,7 +373,9 @@ TEST_F(GattlibScannerWithGMainLoop, SignalAbortTest) {
 
   // Wait for scan to start
   while (!scanner.isScanning()) {
-    std::this_thread::sleep_for(std::chrono::milliseconds(kOneHundredMilliseconds));
+    std::this_thread::sleep_for(
+      std::chrono::milliseconds(kOneHundredMilliseconds)
+    );
   }
 
   // Simulate some device discoveries
@@ -393,8 +407,8 @@ TEST_F(GattlibScannerWithGMainLoop, SignalAbortTest) {
   // Wait for abort to complete
   abortFuture.get();
 
-  // Verify scan completes with success after abort
-  EXPECT_EQ(scanFuture.get(), GATTLIB_SUCCESS)
+  // Verify scan completes with UNEXPECTED status after abort
+  EXPECT_EQ(scanFuture.get(), GATTLIB_UNEXPECTED)
     << "Scan did not complete successfully after abort";
 
   // Verify scanner is no longer scanning

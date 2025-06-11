@@ -172,15 +172,18 @@ int GattlibScanner::Impl::scan(
     shutdown(scanData);
 
     if (timedOut) {
-    BLECPP_LOG_INFO("Scan timed out");
-    scanReturnCode = GATTLIB_TIMEOUT;
-  } else if (finalState == ScanState::SUCCEEDED) {
-    BLECPP_LOG_INFO("Scan succeeded");
+      BLECPP_LOG_INFO("Scan timed out");
+      scanReturnCode = GATTLIB_TIMEOUT;
+    } else if (finalState == ScanState::SUCCEEDED) {
+      BLECPP_LOG_INFO("Scan succeeded");
       scanReturnCode = GATTLIB_SUCCESS;
-  } else {
-    BLECPP_LOG_INFO("Scan failed");
+    } else if (finalState == ScanState::ABORTED) {
+      BLECPP_LOG_INFO("Scan aborted");
+      scanReturnCode = GATTLIB_UNEXPECTED;
+    } else {
+      BLECPP_LOG_INFO("Scan failed");
       scanReturnCode = GATTLIB_DEVICE_ERROR;
-  }
+    }
   } catch (const std::exception &e) {
     BLECPP_LOG_ERROR("Scan failed: {}", e.what());
     shutdown(scanData);
