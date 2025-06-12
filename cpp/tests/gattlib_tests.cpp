@@ -18,8 +18,10 @@
 #include <gattlib.h>
 // NOLINTEND(*)
 
+#include <chrono>
 #include <csignal>
 #include <future>
+#include <thread>
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
@@ -95,8 +97,11 @@ protected:
   std::shared_ptr<blecpp::GMainLoopManager> m_loopManager; // NOLINT
 
   /// Callback storage for tests
-  void (*m_savedCallback)(gattlib_adapter_t *, const char *, const char *, void *); // NOLINT
+  gattlib_discovered_device_t m_savedCallback; // NOLINT
   void *m_savedUserData; // NOLINT
+
+  /// Mutex to protect callback access
+  std::mutex m_callbackMutex; // NOLINT
 };
 
 /**
@@ -153,13 +158,10 @@ TEST_F(GattlibScannerWithGMainLoop, AdapterNullTest) {
   // Expect the scan to be called and start successfully
   EXPECT_CALL(*m_mock, adapter_scan_enable(m_fakeAdapter, _, kTenSeconds, _))
     .WillOnce(DoAll(
-      SaveArg<1>(&m_savedCallback), SaveArg<3>(&m_savedUserData),
+      SaveArg<1>(&m_savedCallback),
+      SaveArg<3>(&m_savedUserData),
       Return(GATTLIB_SUCCESS)
     ));
-
-  // Expect cleanup calls during shutdown
-  EXPECT_CALL(*m_mock, adapter_scan_disable(m_fakeAdapter))
-    .WillOnce(Return(GATTLIB_SUCCESS));
   EXPECT_CALL(*m_mock, adapter_wait_scan_stopped(m_fakeAdapter));
   EXPECT_CALL(*m_mock, adapter_close(m_fakeAdapter)).Times(Exactly(0));
 
@@ -215,10 +217,6 @@ TEST_F(GattlibScannerWithGMainLoop, AdapterNullifiedTest) {
       SaveArg<1>(&m_savedCallback), SaveArg<3>(&m_savedUserData),
       Return(GATTLIB_SUCCESS)
     ));
-
-  // Expect cleanup calls during shutdown
-  EXPECT_CALL(*m_mock, adapter_scan_disable(m_fakeAdapter))
-    .WillOnce(Return(GATTLIB_SUCCESS));
   EXPECT_CALL(*m_mock, adapter_wait_scan_stopped(m_fakeAdapter));
   EXPECT_CALL(*m_mock, adapter_close(m_fakeAdapter)).Times(Exactly(0));
 
@@ -266,7 +264,8 @@ TEST_F(GattlibScannerWithGMainLoop, ConcurrentScansTest) {
   // Set up expectations for the main scan
   EXPECT_CALL(*m_mock, adapter_scan_enable(m_fakeAdapter, _, kTenSeconds, _))
     .WillOnce(DoAll(
-      SaveArg<1>(&m_savedCallback), SaveArg<3>(&m_savedUserData),
+      SaveArg<1>(&m_savedCallback),
+      SaveArg<3>(&m_savedUserData),
       Return(GATTLIB_SUCCESS)
     ));
   EXPECT_CALL(*m_mock, adapter_scan_disable(m_fakeAdapter))
@@ -427,14 +426,21 @@ TEST_F(GattlibScannerWithGMainLoop, ScanForMacTest) {
   blecpp::GattlibScanner scanner(m_fakeAdapter, *m_functions);
   std::string targetMac = "D4:28:C8:F3:7F:A1";
   std::string otherMac = "00:11:22:33:44:55";
-  bool discoveryRunning = true;
+  std::atomic<bool> discoveryRunning{true};
   bool success = false;
+
+  static constexpr auto kCallbackWaitMs = std::chrono::milliseconds(100);
+
+  // Initialize callback to nullptr
+  m_savedCallback = nullptr;
+  m_savedUserData = nullptr;
 
   // Expect multiple scan attempts
   EXPECT_CALL(*m_mock, adapter_scan_enable(m_fakeAdapter, _, 5, _))
     .Times(AtLeast(2))
     .WillRepeatedly(DoAll(
-      SaveArg<1>(&m_savedCallback), SaveArg<3>(&m_savedUserData),
+      SaveArg<1>(&m_savedCallback),
+      SaveArg<3>(&m_savedUserData),
       Return(GATTLIB_SUCCESS)
     ));
   EXPECT_CALL(*m_mock, adapter_scan_disable(m_fakeAdapter))
@@ -449,7 +455,7 @@ TEST_F(GattlibScannerWithGMainLoop, ScanForMacTest) {
     auto startTime = std::chrono::steady_clock::now();
     constexpr int kTenSeconds = 10;
     constexpr int kTwentySeconds = 20;
-    while (discoveryRunning) {
+    while (discoveryRunning.load()) {
       auto now = std::chrono::steady_clock::now();
       auto elapsed =
         std::chrono::duration_cast<std::chrono::seconds>(now - startTime)
@@ -457,22 +463,35 @@ TEST_F(GattlibScannerWithGMainLoop, ScanForMacTest) {
 
       // Stop after 20 seconds
       if (elapsed >= kTwentySeconds) {
-        discoveryRunning = false;
+        discoveryRunning.store(false);
         break;
       }
 
-      if (m_savedCallback != nullptr) {
-        if (elapsed < kTenSeconds) {
-          // First 10 seconds: discover wrong MAC
-          m_savedCallback(
-            m_fakeAdapter, otherMac.c_str(), "Other-Device", m_savedUserData
-          );
-        } else {
-          // 10-20 seconds: discover correct MAC
-          m_savedCallback(
-            m_fakeAdapter, targetMac.c_str(), "Target-Device", m_savedUserData
-          );
-        }
+      // Get current callback state under lock
+      gattlib_discovered_device_t localCallback = nullptr;
+      void* localUserData = nullptr;
+      {
+        std::lock_guard<std::mutex> lock(m_callbackMutex);
+        localCallback = m_savedCallback;
+        localUserData = m_savedUserData;
+      }
+
+      if (localCallback == nullptr) {
+        std::this_thread::sleep_for(kCallbackWaitMs);
+        continue;
+      }
+
+      if (elapsed < kTenSeconds) {
+        // First 10 seconds: discover wrong MAC
+        localCallback(
+          m_fakeAdapter, otherMac.c_str(), "Other-Device", localUserData
+        );
+      } else {
+        // 10-20 seconds: discover correct MAC
+        localCallback(
+          m_fakeAdapter, targetMac.c_str(), "Target-Device", localUserData
+        );
+        discoveryRunning.store(false); // Stop after finding target MAC
       }
 
       // Sleep for 1 second between discoveries
@@ -495,7 +514,7 @@ TEST_F(GattlibScannerWithGMainLoop, ScanForMacTest) {
     }
   }
 
-  // Wait for discovery thread
+  // Always join discovery thread at the end
   if (discoveryThread.joinable()) {
     discoveryThread.join();
   }

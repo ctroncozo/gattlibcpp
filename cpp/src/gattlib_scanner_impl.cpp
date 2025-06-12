@@ -4,10 +4,12 @@
  */
 
 #include "gattlib_scanner_impl.hpp"
+
 #include "gattlib_scanner.hpp"
 #include "gattlib_utils.hpp"
 #include "log_macros.hpp"
 
+#include <future>
 // NOLINTBEGIN(*) Do not check the library
 #include <gattlib.h>
 // NOLINTEND(*)
@@ -21,8 +23,7 @@ GattlibScanner::GattlibScanner(const GattlibFunctions &functions) {
 
 // Public interface implementation
 GattlibScanner::GattlibScanner(
-  gattlib_adapter_t *adapterPtr,
-  const GattlibFunctions& functions
+  gattlib_adapter_t *adapterPtr, const GattlibFunctions &functions
 ) {
   m_pimpl = std::make_unique<Impl>(adapterPtr, functions);
 }
@@ -32,7 +33,7 @@ GattlibScanner::~GattlibScanner() = default;
 
 // Public interface implementation
 int GattlibScanner::scan(
-  uint32_t timeoutSec, const std::optional<std::string>& deviceAddress
+  uint32_t timeoutSec, const std::optional<std::string> &deviceAddress
 ) {
   return m_pimpl->scan(timeoutSec, deviceAddress);
 }
@@ -42,10 +43,10 @@ bool GattlibScanner::isScanning() const { return m_pimpl->isScanning(); }
 void GattlibScanner::abort() { m_pimpl->abort(); }
 
 // PIMPL implementation
-GattlibScanner::Impl::Impl(const GattlibFunctions& functions)
+GattlibScanner::Impl::Impl(const GattlibFunctions &functions)
   : m_gmainLoopManager(std::make_shared<GMainLoopManager>()),
     m_gattlibFunctions(functions), m_scanning(false),
-    m_abort(std::make_shared<std::atomic<bool>>(false)){
+    m_abort(std::make_shared<std::atomic<bool>>(false)) {
 
   if (!functions.isComplete()) {
     throw std::runtime_error("GattlibFunctions is not fully initialized");
@@ -64,12 +65,11 @@ GattlibScanner::Impl::Impl(const GattlibFunctions& functions)
 }
 
 GattlibScanner::Impl::Impl(
-  gattlib_adapter_t *adapterPtr,
-  const GattlibFunctions& functions
+  gattlib_adapter_t *adapterPtr, const GattlibFunctions &functions
 )
   : m_gmainLoopManager(nullptr), m_adapterPtr(adapterPtr),
     m_gattlibFunctions(functions), m_scanning(false),
-    m_abort(std::make_shared<std::atomic<bool>>(false)){
+    m_abort(std::make_shared<std::atomic<bool>>(false)) {
 
   if (m_adapterPtr == nullptr || !functions.isComplete()) {
     throw std::invalid_argument("Constructor parameters cannot be null");
@@ -105,7 +105,7 @@ bool GattlibScanner::Impl::isScanning() const {
 }
 
 int GattlibScanner::Impl::scan(
-  uint32_t timeoutSec, const std::optional<std::string>& deviceAddress
+  uint32_t timeoutSec, const std::optional<std::string> &deviceAddress
 ) {
   BLECPP_LOG_INFO("Scanning for {} seconds", timeoutSec);
   if (m_scanning.load()) {
@@ -131,25 +131,41 @@ int GattlibScanner::Impl::scan(
     BLECPP_LOG_INFO(
       "Scan filter: {}", deviceAddress.value_or("scanning all devices")
     );
+
+    // Create a future to monitor the scan state
+    auto monitorFuture = std::async(std::launch::async, [this, scanData]() {
+      // Only abort if it's scanning otherwise it means it's shutting down, or
+      // failed, succeeded or aborted
+      while (m_scanning.load()) {
+        if (m_abort->load()) {
+          std::lock_guard<std::mutex> lock(scanData->mtx);
+          scanData->state.store(ScanState::ABORTED);
+          scanData->cv.notify_all();
+          break;
+        }
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+      }
+    });
+
     m_scanning.store(true);
     scanReturnCode = m_gattlibFunctions.adapterScanEnable(
       m_adapterPtr, onScanDiscovery, scanData->timeout, scanData
     );
     if (scanReturnCode != GATTLIB_SUCCESS) {
-    BLECPP_LOG_ERROR(
-      "Failed to enable scan: {}", gattLibErrorToString(scanReturnCode)
-    );
+      BLECPP_LOG_ERROR(
+        "Failed to enable scan: {}", gattLibErrorToString(scanReturnCode)
+      );
       scanData->state.store(ScanState::FAILED);
       shutdown(scanData);
       return scanReturnCode;
-  }
+    }
 
     static constexpr int kScanTimeoutBufferSec = 5;
     auto timeoutCondition =
       std::chrono::seconds(timeoutSec + kScanTimeoutBufferSec);
-  BLECPP_LOG_INFO(
-    "Waiting for scan to complete timeout: {}", timeoutCondition.count()
-  );
+    BLECPP_LOG_INFO(
+      "Waiting for scan to complete timeout: {}", timeoutCondition.count()
+    );
 
     bool timedOut = false;
     std::atomic<ScanState> finalState;
@@ -164,10 +180,10 @@ int GattlibScanner::Impl::scan(
                  finalState == ScanState::ABORTED;
         }
       );
-    BLECPP_LOG_INFO(
-      "Finished waiting - Scan state: {}, timed out: {}", toString(finalState),
-      timedOut
-    );
+      BLECPP_LOG_INFO(
+        "Finished waiting - Scan state: {}, timed out: {}",
+        toString(finalState), timedOut
+      );
     }
     shutdown(scanData);
 
@@ -193,7 +209,8 @@ int GattlibScanner::Impl::scan(
 }
 
 void GattlibScanner::Impl::onScanDiscovery(
-  gattlib_adapter_t *adapter, const char *addr, const char *name, void *userData
+  [[maybe_unused]] gattlib_adapter_t *adapter, const char *addr,
+  [[maybe_unused]] const char *name, void *userData
 ) {
   if (userData == nullptr) {
     BLECPP_LOG_ERROR("User data is null");
@@ -213,16 +230,6 @@ void GattlibScanner::Impl::onScanDiscovery(
 
   // Always print out the device info.
   BLECPP_LOG_INFO("Discovered device: {} ({})", addr, name ? name : "unnamed");
-
-  if (scanData->abort->load()) {
-    BLECPP_LOG_INFO("Scan aborted");
-    {
-      std::lock_guard<std::mutex> lock(scanData->mtx);
-      scanData->state.store(ScanState::ABORTED);
-      scanData->cv.notify_all();
-    }
-    return;
-  }
 
   if (scanData->deviceFilter.has_value() &&
       scanData->deviceFilter.value() == addr) {
@@ -260,40 +267,45 @@ void GattlibScanner::Impl::shutdown(ScanContext *scanCtx) {
     );
   }
 
-  std::lock_guard<std::mutex> lock(scanCtx->mtx);
-  if (scanCtx->state == ScanState::SHUTTING_DOWN) {
-    BLECPP_LOG_INFO("Scan is already shutting down or in different state");
-    return;
-  }
-  scanCtx->state = ScanState::SHUTTING_DOWN;
-
-  if (!m_scanning.load()) {
-    BLECPP_LOG_INFO("Scan is not running");
-    throw std::runtime_error("Fatal error: Scan is not running beforeshutdown");
-  }
-
-  auto result = m_gattlibFunctions.adapterScanDisable(m_adapterPtr);
-  if (result != GATTLIB_SUCCESS) {
-    BLECPP_LOG_ERROR("Failed to disable scan: {}", result);
-  }
-
-  m_gattlibFunctions.adapterWaitScanStopped(m_adapterPtr);
-
-  if (m_adapterOwned && m_adapterPtr != nullptr) {
-    int ret = m_gattlibFunctions.adapterClose(m_adapterPtr);
-    if (ret != GATTLIB_SUCCESS) {
-      BLECPP_LOG_ERROR("Failed to close adapter: {}", ret);
+  {
+    std::lock_guard<std::mutex> lock(scanCtx->mtx);
+    if (scanCtx->state == ScanState::SHUTTING_DOWN) {
+      BLECPP_LOG_INFO("Scan is already shutting down or in different state");
+      return;
     }
-    m_adapterPtr = nullptr;
   }
 
-  if (m_gmainLoopManager) {
-    m_gmainLoopManager->stop();
+  {
+    std::lock_guard<std::mutex> shutdownLock(m_shutdownMutex);
+    scanCtx->state = ScanState::SHUTTING_DOWN;
+
+    if (!m_scanning.load()) {
+      BLECPP_LOG_INFO("Scan is not running");
+      throw std::runtime_error("Fatal error: Scan is not running beforeshutdown");
+    }
+
+    auto result = m_gattlibFunctions.adapterScanDisable(m_adapterPtr);
+    if (result != GATTLIB_SUCCESS) {
+      BLECPP_LOG_ERROR("Failed to disable scan: {}", result);
+    }
+
+    m_gattlibFunctions.adapterWaitScanStopped(m_adapterPtr);
+
+    if (m_adapterOwned && m_adapterPtr != nullptr) {
+      int ret = m_gattlibFunctions.adapterClose(m_adapterPtr);
+      if (ret != GATTLIB_SUCCESS) {
+        BLECPP_LOG_ERROR("Failed to close adapter: {}", ret);
+      }
+      m_adapterPtr = nullptr;
+    }
+
+    if (m_gmainLoopManager) {
+      m_gmainLoopManager->stop();
+    }
+
+    cleanup(scanCtx);
+    m_scanning.store(false);
   }
-
-  cleanup(scanCtx);
-
-  m_scanning.store(false);
 }
 
 } // namespace blecpp

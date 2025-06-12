@@ -59,6 +59,7 @@ private:
     gattlib_adapter_t *adapterPtr {nullptr};
     /// Mutex for thread-safe state access
     std::mutex mtx;
+    /// Condition variable for thread-safe state access
     std::condition_variable cv;
     /// Current scan state
     std::atomic<ScanState> state {ScanState::IDLE};
@@ -72,25 +73,25 @@ public:
   /**
    * @brief Constructs a new GattlibScanner.
    */
-  explicit Impl(const GattlibFunctions& functions = GattlibFunctions());
+  explicit Impl(const GattlibFunctions &functions = GattlibFunctions());
 
   /**
    * @brief Constructs a new GattlibScanner with a pre-initialized adapter.
    */
   Impl(
     gattlib_adapter_t *adapterPtr,
-    const GattlibFunctions& functions = GattlibFunctions()
+    const GattlibFunctions &functions = GattlibFunctions()
   );
 
   /// Deep copy constructor deleted
   Impl(const Impl &) = delete;
   /// Copy operator deleted
-  Impl& operator=(const Impl &) = delete;
+  Impl &operator=(const Impl &) = delete;
   /// Move constructor deleted
   Impl(Impl &&) = delete;
   /// Move operator deleted
-  Impl& operator=(Impl&&) = delete;
-  
+  Impl &operator=(Impl &&) = delete;
+
   /**
    * @brief Destroys the GattlibScanner.
    */
@@ -104,7 +105,9 @@ public:
    * is passed and the scan don't find it after timeout, it return error.
    * @return int Return a GATTLIB_* error code defined in gattlib.h
    */
-  int scan(uint32_t timeoutSec, const std::optional<std::string>& deviceAddress);
+  int scan(
+    uint32_t timeoutSec, const std::optional<std::string> &deviceAddress
+  );
 
   /**
    * @brief Checks if a scan is currently in progress.
@@ -214,7 +217,7 @@ private:
   /// Pointer to the BLE adapter
   gattlib_adapter_t *m_adapterPtr {nullptr};
   /// GattlibFunctions for gattlib operations
-  const GattlibFunctions& m_gattlibFunctions;
+  const GattlibFunctions &m_gattlibFunctions;
   /// Flag indicating if a scan is currently in progress
   std::atomic<bool> m_scanning {false};
   /// Shared flag to safely stop callbacks after Scanner destruction.
@@ -223,6 +226,8 @@ private:
   std::shared_ptr<std::atomic<bool>> m_abort {nullptr};
   /// Flag indicating if the adapter was opened by the scanner
   bool m_adapterOwned {false};
+  /// A shutdown mutex to prevent interruptions during shutdown
+  std::mutex m_shutdownMutex;
 };
 
 } // namespace blecpp
