@@ -140,7 +140,7 @@ The goal of this fork is to provide:
 I hope this helps developers who want the power of `gattlib` in a more modern form.
 
 ## 📫 Contact
-Cristian Troncoso [Linkedin](www.linkedin.com/in/cristian-troncoso-05563b139)
+Cristian Troncoso [LinkedIn](https://www.linkedin.com/in/cristian-troncoso-05563b139)
 
 
 ---
