@@ -3,6 +3,7 @@
 
 # Generated files
 build
+.cache/
 __pycache__
 MANIFEST.in
 dist

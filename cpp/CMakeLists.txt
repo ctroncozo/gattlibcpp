@@ -24,6 +24,7 @@ add_library(gattlib_cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/src/gattlib_scanner_impl.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/src/gmain_loop_manager.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/src/gattlib_utils.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/gattlib_client_impl.cpp
 )
 
 # Add include directories

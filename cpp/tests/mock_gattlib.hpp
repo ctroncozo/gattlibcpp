@@ -133,6 +133,46 @@ public:
   );
 
   /**
+   * @brief Google Mock methods matching connect function signature
+   *
+   * This method provides a mock implementation of the connect function,
+   * which can be used for unit testing and dependency injection in production
+   * code.
+   *
+   * @param adapter Handle to the adapter to use for connecting
+   * @param dst The address of the device to connect to
+   * @param options Connection options
+   * @param connectCb Callback to invoke on connect
+   * @param userData User data passed to the callback
+   * @return GATTLIB_SUCCESS on success, or a GATTLIB_* error code
+   */
+  MOCK_METHOD(
+    int, connect,
+    (gattlib_adapter_t * adapter, const char *dst, unsigned long options,
+     gatt_connect_cb_t connectCb, void *userData), ()
+  );
+
+  /**
+   * @brief Google Mock methods matching disconnect function signature
+   *
+   * This method provides a mock implementation of the disconnect function,
+   * which can be used for unit testing and dependency injection in production
+   * code.
+   *
+   * @param adapter Handle to the adapter to use for disconnecting
+   * @param conn The connection to disconnect
+   */
+  MOCK_METHOD(
+    int, disconnect, (gattlib_connection_t *conn, bool wait),
+    ()
+  );
+
+  MOCK_METHOD(
+    int, register_on_disconnect,
+    (gattlib_connection_t *conn, gattlib_disconnection_handler_t disconnectionHandler, void *userData), ()
+  );
+
+  /**
    * @brief Static mock functions for use as C function pointers
    *
    * These static functions provide a way to call the mock methods as C
@@ -193,6 +233,24 @@ public:
     getInstance().adapter_wait_scan_stopped(adapter);
   }
 
+  static int mockConnect(gattlib_adapter_t *adapter,
+                          const char *dst,
+                          unsigned long options,
+                          gatt_connect_cb_t connectCb,
+                          void *userData) {
+    return getInstance().connect(adapter, dst, options, connectCb, userData);
+  }
+
+  static int mockDisconnect(gattlib_connection_t *conn, bool wait) {
+    return getInstance().disconnect(conn, wait);
+  }
+
+  static int mockRegisterOnDisconnect(gattlib_connection_t *conn,
+                                       gattlib_disconnection_handler_t disconnectionHandler,
+                                       void *userData) {
+    return getInstance().register_on_disconnect(conn, disconnectionHandler, userData);
+  }
+
   /**
    * @brief Helper to get a GattlibFunctions struct with all mock functions
    *
@@ -209,6 +267,9 @@ public:
     fns.adapterScanEnable = &mockAdapterScanEnable;
     fns.adapterScanDisable = &mockAdapterScanDisable;
     fns.adapterWaitScanStopped = &mockAdapterWaitScanStopped;
+    fns.connect = &mockConnect;
+    fns.disconnect = &mockDisconnect;
+    fns.registerOnDisconnect = &mockRegisterOnDisconnect;
     return fns;
   }
 

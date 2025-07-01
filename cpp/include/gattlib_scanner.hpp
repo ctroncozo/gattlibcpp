@@ -55,7 +55,7 @@ public:
    * @throws std::invalid_argument if functions is null
    * @throws std::runtime_error if adapter creation fails
    */
-  explicit GattlibScanner(const GattlibFunctions& functions);
+  explicit GattlibScanner(const GattlibFunctions &functions);
 
   /**
    * @brief Constructs a new GattlibScanner with a pre-initialized adapter.
@@ -72,8 +72,7 @@ public:
    * @throws std::invalid_argument if any parameter is null
    */
   GattlibScanner(
-    gattlib_adapter_t *adapterPtr,
-    const GattlibFunctions& functions
+    gattlib_adapter_t *adapterPtr, const GattlibFunctions &functions
   );
 
   /**
@@ -100,6 +99,8 @@ public:
    * @param timeout_sec Duration of the scan in seconds. Must be greater than 0.
    * @param device_address Optional MAC address of a specific BLE device to scan
    * for. If not provided (empty string), scans for all devices.
+   * @param discovered_device_cb Optional callback function to be called when a
+   * device is discovered. If not provided, the default callback will be used.
    *
    * @return GATTLIB_SUCCESS if scan started successfully
    *         GATTLIB_ERROR if scan fails to start or is already in progress
@@ -114,7 +115,10 @@ public:
    * @throw std::runtime_error if scan fails to start.
    */
   int scan(
-    uint32_t timeoutSec, const std::optional<std::string>& deviceAddress = std::nullopt
+    uint32_t timeoutSec,
+    const std::optional<std::string> &deviceAddress = std::nullopt,
+    std::optional<gattlib_discovered_device_t> onDiscoveredDeviceCb =
+      std::nullopt
   );
 
   /**
@@ -135,5 +139,4 @@ private:
   class Impl;
   std::unique_ptr<Impl> m_pimpl;
 };
-
 } // namespace blecpp

@@ -5,7 +5,6 @@
 
 #include "gattlib_scanner_impl.hpp"
 
-#include "gattlib_scanner.hpp"
 #include "gattlib_utils.hpp"
 #include "log_macros.hpp"
 
@@ -28,19 +27,21 @@ GattlibScanner::GattlibScanner(
   m_pimpl = std::make_unique<Impl>(adapterPtr, functions);
 }
 
-// Public interface implementation
-GattlibScanner::~GattlibScanner() = default;
 
 // Public interface implementation
 int GattlibScanner::scan(
-  uint32_t timeoutSec, const std::optional<std::string> &deviceAddress
+  uint32_t timeoutSec, const std::optional<std::string> &deviceAddress,
+  std::optional<gattlib_discovered_device_t> onDiscoveredDeviceCb
 ) {
-  return m_pimpl->scan(timeoutSec, deviceAddress);
+  return m_pimpl->scan(timeoutSec, deviceAddress, onDiscoveredDeviceCb);
 }
 
 bool GattlibScanner::isScanning() const { return m_pimpl->isScanning(); }
 
 void GattlibScanner::abort() { m_pimpl->abort(); }
+
+// PIMPL implementation requires destructor definition in cpp file
+GattlibScanner::~GattlibScanner() = default;
 
 // PIMPL implementation
 GattlibScanner::Impl::Impl(const GattlibFunctions &functions)
@@ -80,6 +81,10 @@ GattlibScanner::Impl::~Impl() { abort(); }
 
 void GattlibScanner::Impl::abort() {
   // Set abort flag to prevent new callbacks
+  if (!m_scanning.load()) {
+    BLECPP_LOG_INFO("Scan is not running");
+    return;
+  }
   try {
     if (m_abort) {
       // The scan context data has a pointer pointing to this abort flag. Hence
@@ -105,7 +110,8 @@ bool GattlibScanner::Impl::isScanning() const {
 }
 
 int GattlibScanner::Impl::scan(
-  uint32_t timeoutSec, const std::optional<std::string> &deviceAddress
+  uint32_t timeoutSec, const std::optional<std::string> &deviceAddress,
+  std::optional<gattlib_discovered_device_t> onDiscoveredDeviceCb
 ) {
   BLECPP_LOG_INFO("Scanning for {} seconds", timeoutSec);
   if (m_scanning.load()) {
@@ -148,9 +154,20 @@ int GattlibScanner::Impl::scan(
     });
 
     m_scanning.store(true);
-    scanReturnCode = m_gattlibFunctions.adapterScanEnable(
-      m_adapterPtr, onScanDiscovery, scanData->timeout, scanData
-    );
+
+    // Check whether to use custom or default onDiscoveredDeviceCb
+    if (onDiscoveredDeviceCb.has_value()) {
+      BLECPP_LOG_DEBUG("Using custom onDiscoveredDeviceCb");
+      scanReturnCode = m_gattlibFunctions.adapterScanEnable(
+          m_adapterPtr, onDiscoveredDeviceCb.value(), scanData->timeout, scanData
+      );
+    } else {
+      BLECPP_LOG_DEBUG("Using default onDiscoveredDeviceCb");
+      scanReturnCode = m_gattlibFunctions.adapterScanEnable(
+        m_adapterPtr, onScanDiscovery, scanData->timeout, scanData
+      );
+    }
+
     if (scanReturnCode != GATTLIB_SUCCESS) {
       BLECPP_LOG_ERROR(
         "Failed to enable scan: {}", gattLibErrorToString(scanReturnCode)
@@ -160,6 +177,8 @@ int GattlibScanner::Impl::scan(
       return scanReturnCode;
     }
 
+    // Add a buffer to the timeout to account for the time Dbus and BlueZ
+    // might take to stop scanning
     static constexpr int kScanTimeoutBufferSec = 5;
     auto timeoutCondition =
       std::chrono::seconds(timeoutSec + kScanTimeoutBufferSec);

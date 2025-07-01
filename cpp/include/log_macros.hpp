@@ -76,10 +76,13 @@ public:
    */
   static T &get() {
     static auto instance = []() {
-      auto logger = spdlog::stdout_color_mt("gattlib");
-      logger->set_level(spdlog::level::debug);
-      logger->set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%l] %v");
-      return logger;
+      std::shared_ptr<spdlog::logger> consoleLogger = spdlog::stdout_color_mt("logger");
+      spdlog::set_default_logger(consoleLogger);
+      spdlog::set_level(spdlog::level::debug);
+      // %s:%# will be populated by source_loc when using the source-aware logging methods
+      spdlog::set_pattern("[%H:%M:%S.%e] [%^%l%$] [%s:%#] [T %t] %v");
+
+      return consoleLogger;
     }();
     return *instance;
   }
@@ -150,6 +153,78 @@ public:
     get().critical(fmt, std::forward<Args>(args)...);
   }
 
+  /**
+   * @brief Log a trace message with source location information.
+   * @tparam Args Variadic template for format arguments
+   * @param loc Source location information
+   * @param fmt Format string
+   * @param args Format arguments
+   */
+  template <typename... Args>
+  static void traceWithSource(const spdlog::source_loc& loc, spdlog::format_string_t<Args...> fmt, Args &&...args) {
+    get().log(loc, spdlog::level::trace, fmt, std::forward<Args>(args)...);
+  }
+
+  /**
+   * @brief Log a debug message with source location information.
+   * @tparam Args Variadic template for format arguments
+   * @param loc Source location information
+   * @param fmt Format string
+   * @param args Format arguments
+   */
+  template <typename... Args>
+  static void debugWithSource(const spdlog::source_loc& loc, spdlog::format_string_t<Args...> fmt, Args &&...args) {
+    get().log(loc, spdlog::level::debug, fmt, std::forward<Args>(args)...);
+  }
+
+  /**
+   * @brief Log an info message with source location information.
+   * @tparam Args Variadic template for format arguments
+   * @param loc Source location information
+   * @param fmt Format string
+   * @param args Format arguments
+   */
+  template <typename... Args>
+  static void infoWithSource(const spdlog::source_loc& loc, spdlog::format_string_t<Args...> fmt, Args &&...args) {
+    get().log(loc, spdlog::level::info, fmt, std::forward<Args>(args)...);
+  }
+
+  /**
+   * @brief Log a warning message with source location information.
+   * @tparam Args Variadic template for format arguments
+   * @param loc Source location information
+   * @param fmt Format string
+   * @param args Format arguments
+   */
+  template <typename... Args>
+  static void warnWithSource(const spdlog::source_loc& loc, spdlog::format_string_t<Args...> fmt, Args &&...args) {
+    get().log(loc, spdlog::level::warn, fmt, std::forward<Args>(args)...);
+  }
+
+  /**
+   * @brief Log an error message with source location information.
+   * @tparam Args Variadic template for format arguments
+   * @param loc Source location information
+   * @param fmt Format string
+   * @param args Format arguments
+   */
+  template <typename... Args>
+  static void errorWithSource(const spdlog::source_loc& loc, spdlog::format_string_t<Args...> fmt, Args &&...args) {
+    get().log(loc, spdlog::level::err, fmt, std::forward<Args>(args)...);
+  }
+
+  /**
+   * @brief Log a critical message with source location information.
+   * @tparam Args Variadic template for format arguments
+   * @param loc Source location information
+   * @param fmt Format string
+   * @param args Format arguments
+   */
+  template <typename... Args>
+  static void criticalWithSource(const spdlog::source_loc& loc, spdlog::format_string_t<Args...> fmt, Args &&...args) {
+    get().log(loc, spdlog::level::critical, fmt, std::forward<Args>(args)...);
+  }
+
   LogManager() = delete; // Prevent instantiation
 
 }; // class LogManager
@@ -166,10 +241,12 @@ using Log = LogManager<Logger_t>;
  * @brief User-facing logging macros.
  * These macros provide a simple interface to the logging system.
  * They automatically forward all arguments to the appropriate logging method.
+ * They also capture source file and line information for better debugging.
  */
-#define BLECPP_LOG_TRACE(...) ::blecpp::Log::trace(__VA_ARGS__)       // NOLINT
-#define BLECPP_LOG_DEBUG(...) ::blecpp::Log::debug(__VA_ARGS__)       // NOLINT
-#define BLECPP_LOG_INFO(...) ::blecpp::Log::info(__VA_ARGS__)         // NOLINT
-#define BLECPP_LOG_WARN(...) ::blecpp::Log::warn(__VA_ARGS__)         // NOLINT
-#define BLECPP_LOG_ERROR(...) ::blecpp::Log::error(__VA_ARGS__)       // NOLINT
-#define BLECPP_LOG_CRITICAL(...) ::blecpp::Log::critical(__VA_ARGS__) // NOLINT
+// Use spdlog's source location aware logging methods
+#define BLECPP_LOG_TRACE(...) ::blecpp::Log::traceWithSource({__FILE__, __LINE__, __FUNCTION__}, __VA_ARGS__)       // NOLINT
+#define BLECPP_LOG_DEBUG(...) ::blecpp::Log::debugWithSource({__FILE__, __LINE__, __FUNCTION__}, __VA_ARGS__)       // NOLINT
+#define BLECPP_LOG_INFO(...) ::blecpp::Log::infoWithSource({__FILE__, __LINE__, __FUNCTION__}, __VA_ARGS__)         // NOLINT
+#define BLECPP_LOG_WARN(...) ::blecpp::Log::warnWithSource({__FILE__, __LINE__, __FUNCTION__}, __VA_ARGS__)         // NOLINT
+#define BLECPP_LOG_ERROR(...) ::blecpp::Log::errorWithSource({__FILE__, __LINE__, __FUNCTION__}, __VA_ARGS__)       // NOLINT
+#define BLECPP_LOG_CRITICAL(...) ::blecpp::Log::criticalWithSource({__FILE__, __LINE__, __FUNCTION__}, __VA_ARGS__) // NOLINT

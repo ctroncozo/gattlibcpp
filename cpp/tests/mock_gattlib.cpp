@@ -31,11 +31,18 @@ int gattlibAdapterScanEnable(
   );
 }
 
-int gattlib_adapter_scan_disable(gattlib_adapter_t *adapter) {
+int gattlibAdapterScanDisable(gattlib_adapter_t *adapter) {
   return MockGattlib::mockAdapterScanDisable(adapter);
 }
 
-void gattlib_adapter_wait_scan_stopped(gattlib_adapter_t *adapter) {
+int gattlibConnect(
+  gattlib_adapter_t *adapter, const char *dst, unsigned long options,
+  gatt_connect_cb_t connectCb, void *userData
+) {
+  return MockGattlib::mockConnect(adapter, dst, options, connectCb, userData);
+  }
+
+void gattlibAdapterWaitScanStopped(gattlib_adapter_t *adapter) {
   MockGattlib::mockAdapterWaitScanStopped(adapter);
 }
 }

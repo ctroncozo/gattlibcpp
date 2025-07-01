@@ -127,6 +127,49 @@ struct GattlibFunctions {
    */
   using AdapterWaitScanStoppedFn = void (*)(gattlib_adapter_t *adapter);
 
+  /**
+   * @brief Function pointer type for connecting to a BLE device
+   *
+   * Corresponds to gattlib_connect() in the gattlib API.
+   *
+   * @param adapter The adapter to use
+   * @param dst The address of the device to connect to
+   * @param timeout Connection timeout in milliseconds
+   * @param connectCb Callback to invoke on connect
+   * @param userData User data passed to the callback
+   * @return GATTLIB_SUCCESS on success, or a GATTLIB_* error code
+   */
+  using ConnectFn = int (*)(gattlib_adapter_t *adapter,
+                            const char *dst,
+                            unsigned long options,
+                            gatt_connect_cb_t connectCb,
+                            void *userData);
+
+  /**
+   * @brief Function pointer type for disconnecting from a BLE device
+   *
+   * Corresponds to gattlib_disconnect() in the gattlib API.
+   *
+   * @param connection The BLE connection to disconnect
+   * @param wait Whether to wait for the disconnect to complete
+   * @return GATTLIB_SUCCESS on success, or a GATTLIB_* error code
+   */
+  using DisconnectFn = int (*)(gattlib_connection_t *connection, bool wait);
+
+  /**
+   * @brief Function pointer type for registering a disconnect callback
+   *
+   * Corresponds to gattlib_register_on_disconnect() in the gattlib API.
+   *
+   * @param connection The BLE connection
+   * @param disconnectionHandler Callback to invoke on disconnect
+   * @param userData User data passed to the callback
+   * @return GATTLIB_SUCCESS on success, or a GATTLIB_* error code
+   */
+  using RegisterOnDisconnectFn = int (*)(gattlib_connection_t *connection,
+                                         gattlib_disconnection_handler_t disconnectionHandler,
+                                         void *userData);
+
   /// Function to open a Bluetooth adapter
   /// NOLINTNEXTLINE
   AdapterOpenFn adapterOpen {gattlib_adapter_open};
@@ -144,6 +187,15 @@ struct GattlibFunctions {
   AdapterWaitScanStoppedFn adapterWaitScanStopped {
     gattlib_adapter_wait_scan_stopped
   };
+  /// Function to connect to a BLE device
+  /// NOLINTNEXTLINE
+  ConnectFn connect {gattlib_connect};
+  /// Function to disconnect from a BLE device
+  /// NOLINTNEXTLINE
+  DisconnectFn disconnect {gattlib_disconnect};
+  /// Function to register a disconnect callback
+  /// NOLINTNEXTLINE
+  RegisterOnDisconnectFn registerOnDisconnect {gattlib_register_on_disconnect};
 
   /**
    * @brief Default constructor
@@ -161,7 +213,8 @@ struct GattlibFunctions {
   [[nodiscard]] bool isComplete() const {
     return adapterOpen != nullptr && adapterClose != nullptr &&
            adapterScanEnable != nullptr && adapterScanDisable != nullptr &&
-           adapterWaitScanStopped != nullptr;
+           adapterWaitScanStopped != nullptr && connect != nullptr &&
+           disconnect != nullptr && registerOnDisconnect != nullptr;
   }
 };
 

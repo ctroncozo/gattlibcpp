@@ -28,6 +28,7 @@ namespace blecpp {
 class GattlibScanner::Impl {
 private:
   /**
+   * @enum ScanState
    * @brief Enumerates the possible states of a BLE scan.
    */
   enum class ScanState {
@@ -103,10 +104,13 @@ public:
    * @param timeSec Stop the scan after some time passed.
    * @param deviceAddress [optional] An mac address to scan for. If an address
    * is passed and the scan don't find it after timeout, it return error.
+   * @param discoveredDeviceCb [optional] A callback function to be called when
+   * a device is discovered. If not provided, the default callback will be used.
    * @return int Return a GATTLIB_* error code defined in gattlib.h
    */
   int scan(
-    uint32_t timeoutSec, const std::optional<std::string> &deviceAddress
+    uint32_t timeoutSec, const std::optional<std::string> &deviceAddress,
+    std::optional<gattlib_discovered_device_t> onDiscoveredDeviceCb
   );
 
   /**

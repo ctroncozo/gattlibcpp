@@ -61,11 +61,14 @@ protected:
 
     // Create adapter through the mock interface
     int result = MockGattlib::mockAdapterOpen("hci0", &m_fakeAdapter);
+
     EXPECT_EQ(result, GATTLIB_SUCCESS);
     EXPECT_NE(m_fakeAdapter, nullptr);
+
     m_functions =
       std::make_shared<blecpp::GattlibFunctions>(MockGattlib::getMockFunctions()
       );
+
     m_loopManager = std::make_shared<blecpp::GMainLoopManager>();
     if (!m_loopManager->start()) {
       throw std::runtime_error("Failed to start GMainLoop");
@@ -446,8 +449,10 @@ TEST_F(GattlibScannerWithGMainLoop, ScanForMacTest) {
   EXPECT_CALL(*m_mock, adapter_scan_disable(m_fakeAdapter))
     .Times(AtLeast(2))
     .WillRepeatedly(Return(GATTLIB_SUCCESS));
+
   EXPECT_CALL(*m_mock, adapter_wait_scan_stopped(m_fakeAdapter))
     .Times(AtLeast(2));
+  
   EXPECT_CALL(*m_mock, adapter_close(m_fakeAdapter)).Times(Exactly(0));
 
   // Start discovery simulation thread
